@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Pithos Notebook
+GenericName=Markdown Notebook
+Comment=Private, encrypted markdown notebook
+Exec=pithos-notebook
+Icon=com.pithos.notebook
+Categories=Office;TextEditor;Utility;
+Keywords=markdown;notes;encrypted;notebook;pithos;
+Terminal=false
+StartupNotify=true

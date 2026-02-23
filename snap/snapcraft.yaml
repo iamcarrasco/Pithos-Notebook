@@ -1,0 +1,99 @@
+name: pithos-notebook
+version: '0.1.0'
+summary: Private, encrypted markdown notebook
+description: |
+  Pithos Notebook is an offline encrypted markdown notebook for Linux.
+  Your notes never leave your machine. AES-256-GCM encryption with
+  PBKDF2 key derivation. Built with GTK 4 and Libadwaita.
+title: Pithos Notebook
+license: GPL-3.0
+contact: https://github.com/iamcarrasco/Pithos-Notebook/issues
+issues: https://github.com/iamcarrasco/Pithos-Notebook/issues
+source-code: https://github.com/iamcarrasco/Pithos-Notebook
+website: https://github.com/iamcarrasco/Pithos-Notebook
+lint:
+  ignore:
+    - library:
+        - usr/lib/**/libGLESv2.so*
+        - usr/lib/**/libcolordprivate.so*
+        - usr/lib/**/libdconf.so*
+        - usr/lib/**/libicuio.so*
+        - usr/lib/**/libicutest.so*
+        - usr/lib/**/libicutu.so*
+        - usr/lib/**/libGLdispatch.so*
+grade: stable
+confinement: strict
+base: core24
+icon: data/icons/hicolor/512x512/apps/com.pithos.notebook.png
+
+slots:
+  dbus-pithos:
+    interface: dbus
+    bus: session
+    name: com.pithos.notebook
+
+apps:
+  pithos-notebook:
+    command: usr/bin/pithos-notebook
+    desktop: usr/share/applications/com.pithos.notebook.desktop
+    extensions: [gnome]
+    environment:
+      # Gnome-platform libs first (matched ABI for harfbuzz, glib, etc.),
+      # then snap's own staged libs (WebKitGTK, GtkSourceView — not in gnome-platform).
+      LD_LIBRARY_PATH: "$SNAP/gnome-platform/usr/lib/$CRAFT_ARCH_TRIPLET_BUILD_FOR:$SNAP/gnome-platform/usr/lib:$SNAP/gnome-platform/lib/$CRAFT_ARCH_TRIPLET_BUILD_FOR:$SNAP/gnome-platform/lib:$SNAP/usr/lib/$CRAFT_ARCH_TRIPLET_BUILD_FOR:$SNAP/usr/lib:$SNAP/lib/$CRAFT_ARCH_TRIPLET_BUILD_FOR:$SNAP/lib"
+      # Avoid portal network-monitor call failures inside strict sandbox.
+      GIO_USE_NETWORK_MONITOR: base
+      # Ensure libproxy can find its backend module inside the snap.
+      PX_MODULE_PATH: "$SNAP/gnome-platform/usr/lib/$CRAFT_ARCH_TRIPLET_BUILD_FOR/libproxy:$SNAP/usr/lib/$CRAFT_ARCH_TRIPLET_BUILD_FOR/libproxy"
+      # Disable WebKit's internal bwrap sandbox — snap's strict confinement already sandboxes the app.
+      WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS: "1"
+      # Disable DMA-BUF renderer — its kernel interfaces are blocked by snap seccomp filters.
+      WEBKIT_DISABLE_DMABUF_RENDERER: "1"
+    plugs:
+      - home
+      - removable-media
+      - browser-support
+    slots:
+      - dbus-pithos
+
+layout:
+  # WebKitGTK looks for helper processes (WebKitWebProcess, WebKitNetworkProcess)
+  # at their hard-coded system path. Bind-mount them from the snap.
+  /usr/lib/x86_64-linux-gnu/webkitgtk-6.0:
+    bind: $SNAP/usr/lib/x86_64-linux-gnu/webkitgtk-6.0
+  # libproxy uses an absolute backend path under /usr/lib/.../libproxy.
+  /usr/lib/x86_64-linux-gnu/libproxy:
+    bind: $SNAP/gnome-platform/usr/lib/x86_64-linux-gnu/libproxy
+
+parts:
+  pithos-notebook:
+    plugin: rust
+    source: .
+    rust-channel: stable
+    build-packages:
+      - pkg-config
+      - libgtk-4-dev
+      - libadwaita-1-dev
+      - libgtksourceview-5-dev
+      - libwebkitgtk-6.0-dev
+      - libjavascriptcoregtk-6.0-dev
+    stage-packages:
+      - libgtksourceview-5-0
+      - libwebkitgtk-6.0-4
+      - libjavascriptcoregtk-6.0-1
+    prime:
+      # Do not ship duplicate GTK/libadwaita runtime files: use gnome extension copies.
+      - -usr/lib/*/libgtk-4.so*
+      - -usr/lib/*/libgdk-4.so*
+      - -usr/lib/*/libadwaita-1.so*
+      - -usr/lib/*/gtk-4.0/**
+    organize:
+      bin/pithos-notebook: usr/bin/pithos-notebook
+    override-build: |
+      craftctl default
+      install -Dm644 $CRAFT_PART_SRC/data/icons/hicolor/512x512/apps/com.pithos.notebook.png \
+        $CRAFT_PART_INSTALL/usr/share/icons/hicolor/512x512/apps/com.pithos.notebook.png
+      install -Dm644 $CRAFT_PART_SRC/data/com.pithos.notebook.desktop \
+        $CRAFT_PART_INSTALL/usr/share/applications/com.pithos.notebook.desktop
+      install -Dm644 $CRAFT_PART_SRC/data/com.pithos.notebook.metainfo.xml \
+        $CRAFT_PART_INSTALL/usr/share/metainfo/com.pithos.notebook.metainfo.xml
