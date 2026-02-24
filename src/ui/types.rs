@@ -48,6 +48,19 @@ pub struct EditorCtx {
     pub content_stack: gtk::Stack,
     pub sync_timeout_id: Rc<Cell<Option<glib::SourceId>>>,
     pub search_timeout_id: Rc<Cell<Option<glib::SourceId>>>,
+    // Content chrome
+    pub content_header: adw::HeaderBar,
+    // Find/replace bar
+    pub find_bar: gtk::Box,
+    pub find_entry: gtk::SearchEntry,
+    pub replace_entry: gtk::Entry,
+    pub replace_row: gtk::Box,
+    pub find_match_label: gtk::Label,
+    pub search_context: sourceview::SearchContext,
+    pub search_settings: sourceview::SearchSettings,
+    // Link autocomplete
+    pub link_popover: gtk::Popover,
+    pub link_list_box: gtk::ListBox,
 }
 
 pub struct ContentPaneWidgets {
@@ -74,6 +87,17 @@ pub struct ContentPaneWidgets {
     pub tag_entry: gtk::Entry,
     pub toolbar_widgets: ToolbarWidgets,
     pub content_stack: gtk::Stack,
+    // Find/replace bar
+    pub find_bar: gtk::Box,
+    pub find_entry: gtk::SearchEntry,
+    pub replace_entry: gtk::Entry,
+    pub replace_row: gtk::Box,
+    pub find_match_label: gtk::Label,
+    pub search_context: sourceview::SearchContext,
+    pub search_settings: sourceview::SearchSettings,
+    // Link autocomplete
+    pub link_popover: gtk::Popover,
+    pub link_list_box: gtk::ListBox,
 }
 
 pub struct ToolbarWidgets {
@@ -97,7 +121,12 @@ pub struct ToolbarWidgets {
     pub ordered: gtk::Button,
     pub task: gtk::Button,
     pub link: gtk::Button,
-    pub table: gtk::Button,
+    pub table_menu: gtk::MenuButton,
+    pub table_popover: gtk::Popover,
+    pub table_hover: Rc<Cell<(i32, i32)>>,
+    pub table_add_row: gtk::Button,
+    pub table_add_col: gtk::Button,
+    pub table_align: gtk::Button,
     pub rule: gtk::Button,
     pub fullscreen: gtk::Button,
     pub image: gtk::Button,

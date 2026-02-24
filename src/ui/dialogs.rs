@@ -65,7 +65,7 @@ pub fn show_shortcuts_window(parent: &adw::ApplicationWindow) {
 pub fn show_about_dialog(parent: &adw::ApplicationWindow) {
     let dialog = adw::AboutDialog::new();
     dialog.set_application_name("Pithos Notebook");
-    dialog.set_version("0.1.0");
+    dialog.set_version("0.2.0");
     dialog.set_developer_name("iamcarrasco");
     dialog.set_license_type(gtk::License::Gpl30);
     dialog.set_comments("A private, offline, encrypted Markdown notebook.");

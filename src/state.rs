@@ -267,6 +267,11 @@ pub struct DocState {
     pub filter_tags: Vec<String>,
     pub tag_filter_and: bool, // true = AND mode, false = OR mode
     pub sidebar_width: i32,
+    pub hemingway_mode: bool,
+    pub focus_mode: bool,
+    pub typewriter_scrolling: bool,
+    pub preview_theme: String,
+    pub spellcheck_enabled: bool,
 
     pub last_undo_push: std::time::Instant,
     pub assets: HashMap<String, vault::AssetMeta>,
@@ -319,6 +324,11 @@ impl Default for DocState {
             filter_tags: Vec::new(),
             tag_filter_and: false,
             sidebar_width: 300,
+            hemingway_mode: false,
+            focus_mode: false,
+            typewriter_scrolling: false,
+            preview_theme: "default".to_string(),
+            spellcheck_enabled: false,
 
             last_undo_push: std::time::Instant::now(),
             assets: HashMap::new(),

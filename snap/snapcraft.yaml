@@ -1,5 +1,5 @@
 name: pithos-notebook
-version: '0.1.0'
+version: '0.2.0'
 summary: Private, encrypted markdown notebook
 description: |
   Pithos Notebook is an offline encrypted markdown notebook for Linux.

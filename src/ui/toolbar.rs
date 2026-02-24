@@ -1,4 +1,5 @@
 use adw::prelude::*;
+use std::{cell::Cell, rc::Rc};
 
 use crate::ui::types::*;
 use crate::*; // For everything left in main.rs temporarily
@@ -63,7 +64,112 @@ pub fn build_toolbar() -> (gtk::Box, ToolbarWidgets) {
     let task_btn = icon_button("emblem-ok-symbolic", "Task list");
 
     let link_btn = icon_button("insert-link-symbolic", "Insert link (Ctrl+K)");
-    let table_btn = icon_button("view-grid-symbolic", "Insert table");
+
+    let table_menu_btn = gtk::MenuButton::new();
+    table_menu_btn.set_icon_name("view-grid-symbolic");
+    table_menu_btn.set_tooltip_text(Some("Table actions"));
+    set_accessible_label(&table_menu_btn, "Table actions");
+    table_menu_btn.add_css_class("flat");
+    table_menu_btn.add_css_class("toolbar-icon");
+    let table_popover = gtk::Popover::new();
+    let table_popover_box = gtk::Box::new(gtk::Orientation::Vertical, 6);
+    table_popover_box.set_margin_start(6);
+    table_popover_box.set_margin_end(6);
+    table_popover_box.set_margin_top(6);
+    table_popover_box.set_margin_bottom(6);
+
+    // --- Table size grid picker (Apostrophe-style) ---
+    let table_grid = gtk::Grid::new();
+    table_grid.set_column_spacing(2);
+    table_grid.set_row_spacing(2);
+    let table_grid_label = gtk::Label::new(None);
+    table_grid_label.add_css_class("table-grid-label");
+    table_grid_label.set_halign(gtk::Align::Center);
+    table_grid_label.set_valign(gtk::Align::Center);
+    table_grid_label.set_can_target(false);
+
+    let table_hover: Rc<Cell<(i32, i32)>> = Rc::new(Cell::new((0, 0)));
+
+    const GRID_ROWS: i32 = 5;
+    const GRID_COLS: i32 = 6;
+    for row in 0..GRID_ROWS {
+        for col in 0..GRID_COLS {
+            let cell = gtk::Button::new();
+            cell.add_css_class("flat");
+            cell.add_css_class("table-grid-cell");
+            // Name encodes position for hover lookup
+            cell.set_widget_name(&format!("tc-{}-{}", row + 1, col + 1));
+
+            // Hover tracking
+            let motion = gtk::EventControllerMotion::new();
+            {
+                let grid = table_grid.clone();
+                let label = table_grid_label.clone();
+                let hover = table_hover.clone();
+                let r = row + 1;
+                let c = col + 1;
+                motion.connect_enter(move |_, _, _| {
+                    hover.set((r, c));
+                    // Highlight all cells from top-left to this one
+                    let mut child = grid.first_child();
+                    while let Some(w) = child {
+                        let name = w.widget_name();
+                        if let Some(rest) = name.strip_prefix("tc-") {
+                            let parts: Vec<&str> = rest.split('-').collect();
+                            if parts.len() == 2 {
+                                let cr: i32 = parts[0].parse().unwrap_or(0);
+                                let cc: i32 = parts[1].parse().unwrap_or(0);
+                                if cr <= r && cc <= c {
+                                    w.add_css_class("hovered");
+                                } else {
+                                    w.remove_css_class("hovered");
+                                }
+                            }
+                        }
+                        child = w.next_sibling();
+                    }
+                    label.set_label(&format!("{r} \u{00d7} {c}"));
+                });
+            }
+            {
+                let grid = table_grid.clone();
+                let label = table_grid_label.clone();
+                let hover = table_hover.clone();
+                motion.connect_leave(move |_| {
+                    hover.set((0, 0));
+                    let mut child = grid.first_child();
+                    while let Some(w) = child {
+                        w.remove_css_class("hovered");
+                        child = w.next_sibling();
+                    }
+                    label.set_label("");
+                });
+            }
+            cell.add_controller(motion);
+            table_grid.attach(&cell, col, row, 1, 1);
+        }
+    }
+
+    let grid_overlay = gtk::Overlay::new();
+    grid_overlay.set_child(Some(&table_grid));
+    grid_overlay.add_overlay(&table_grid_label);
+    table_popover_box.append(&grid_overlay);
+
+    let table_sep = gtk::Separator::new(gtk::Orientation::Horizontal);
+    table_popover_box.append(&table_sep);
+
+    let table_add_row_btn = gtk::Button::with_label("Add Row");
+    let table_add_col_btn = gtk::Button::with_label("Add Column");
+    let table_align_btn = gtk::Button::with_label("Align Table");
+    for button in [&table_add_row_btn, &table_add_col_btn, &table_align_btn] {
+        button.add_css_class("flat");
+        button.set_halign(gtk::Align::Fill);
+        button.set_hexpand(true);
+        table_popover_box.append(button);
+    }
+    table_popover.set_child(Some(&table_popover_box));
+    table_menu_btn.set_popover(Some(&table_popover));
+
     let rule_btn = symbol_button("\u{2014}", "Insert horizontal rule");
     let fullscreen_btn = icon_button("view-fullscreen-symbolic", "Fullscreen (F11)");
 
@@ -125,9 +231,10 @@ pub fn build_toolbar() -> (gtk::Box, ToolbarWidgets) {
 
     let insert_group = gtk::Box::new(gtk::Orientation::Horizontal, 0);
     insert_group.add_css_class("linked");
-    for button in [&link_btn, &table_btn, &rule_btn, &image_btn] {
-        insert_group.append(button);
-    }
+    insert_group.append(&link_btn);
+    insert_group.append(&table_menu_btn);
+    insert_group.append(&rule_btn);
+    insert_group.append(&image_btn);
     toolbar.append(&insert_group);
 
     toolbar.append(&code_block_menu_btn);
@@ -155,7 +262,12 @@ pub fn build_toolbar() -> (gtk::Box, ToolbarWidgets) {
         ordered: ordered_btn,
         task: task_btn,
         link: link_btn,
-        table: table_btn,
+        table_menu: table_menu_btn,
+        table_popover,
+        table_hover,
+        table_add_row: table_add_row_btn,
+        table_add_col: table_add_col_btn,
+        table_align: table_align_btn,
         rule: rule_btn,
         fullscreen: fullscreen_btn,
         image: image_btn,

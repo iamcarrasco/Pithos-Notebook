@@ -36,37 +36,50 @@ Built from the ground up with GTK 4 and Libadwaita for a fast, lightweight exper
 Your entire notebook is encrypted with a passphrase you choose. AES-256-GCM encryption with PBKDF2 key derivation (600,000 iterations). The passphrase is never stored anywhere — lose it and your data is gone. That's the point.
 
 ### Source Editor + Live Preview
-Edit raw markdown in a syntax-highlighted source editor (GtkSourceView) with a side-by-side live HTML preview (WebKitGTK). Toolbar buttons and keyboard shortcuts insert markdown syntax automatically.
+Edit raw markdown in a syntax-highlighted source editor (GtkSourceView) with a side-by-side live HTML preview (WebKitGTK). Toolbar buttons and keyboard shortcuts insert markdown syntax automatically. Synchronized scrolling keeps the preview aligned with your editing position.
 
 ### Mermaid Diagrams
 Write Mermaid diagram blocks in your notes and see them rendered live in the preview pane — flowcharts, sequence diagrams, class diagrams, and more.
 
 ### Wiki Links & Backlinks
-Link notes together with `[[Note Name]]` syntax. A backlinks panel shows every note that references the current one.
+Link notes together with `[[Note Name]]` syntax. An autocomplete popover suggests note names as you type. A backlinks panel shows every note that references the current one.
 
 ### Organization
 - **Folders** — Nest notes in folders, create and rename from the sidebar
 - **Tabs** — Open multiple notes, drag to reorder, close with `Ctrl+W`
 - **Tags** — Filter by AND/OR logic with a collapsible sidebar panel
-- **Search** — Search note titles with `Ctrl+Shift+F`
+- **Search** — Search note titles and content with `Ctrl+Shift+F`; supports `tag:`, `in:folder`, and quoted phrases
 - **Daily notes** — One-click creation with `Ctrl+Shift+T`
 - **Templates** — Create notes from built-in or custom templates
 - **Sort** — By name, date created, or date modified (ascending/descending)
 - **Version history** — Save named snapshots and restore earlier content
+- **Trash** — Deleted notes go to trash with auto-purge after 30 days
 
 ### Writing
 - **Zen mode** — Distraction-free writing with `Ctrl+Shift+J`
+- **Focus mode** — Dims all text except the current paragraph
+- **Hemingway mode** — Disables backspace and delete for forward-only writing
+- **Typewriter scrolling** — Keeps the cursor line vertically centered
+- **Smart list continuation** — Press Enter in a list to auto-continue with the matching prefix
+- **Find and replace** — In-editor search with regex toggle and match count
+- **Table editing** — Add rows, add columns, and auto-align from toolbar or command palette
 - **Code blocks** — Fenced blocks with language selector for 14 languages
-- **Encrypted image storage** — Drag images into the editor; each image is encrypted and stored as a separate vault asset
+- **Encrypted image storage** — Drag or paste images into the editor; each image is encrypted and stored as a separate vault asset
+- **Copy as HTML** — Copy the current note's rendered HTML to the clipboard
 - **Markdown & HTML export** — Export individual notes from the menu
 - **Import** — Import `.md` files with `Ctrl+O`
 - **Command palette** — Quick access to all actions with `Ctrl+Shift+P`
+- **Inline link tooltips** — Hover over markdown links and images to see their URL
 
 ### Desktop Integration
 - **Dark mode** — Toggle with button or `Ctrl+Shift+D`, matched across editor and preview
-- **Fullscreen** — `F11` for immersive editing
+- **Preview themes** — Cycle between Default, Sepia, and Solarized preview styles
+- **Fullscreen** — `F11` for immersive editing with auto-hiding header bar
 - **Adaptive layout** — Sidebar collapses to overlay on narrow windows
 - **Auto-save** — Saves every 30 seconds and on close
+- **Vault change monitoring** — Notified when vault.json is modified externally
+- **Change passphrase** — Re-encrypt your entire vault with a new passphrase
+- **Vault backup** — Automatic backup before each save
 - **Libadwaita** — Native GNOME look and feel
 
 ---
@@ -84,6 +97,8 @@ Link notes together with `[[Note Name]]` syntax. A backlinks panel shows every n
 | `Ctrl+Shift+J` | Zen mode |
 | `Ctrl+Shift+P` | Command palette |
 | `Ctrl+\` | Toggle sidebar |
+| `Ctrl+F` | Find in editor |
+| `Ctrl+H` | Find and replace |
 | `F2` | Rename note |
 | `F11` | Fullscreen |
 
@@ -110,12 +125,17 @@ Link notes together with `[[Note Name]]` syntax. A backlinks panel shows every n
 
 | | |
 |---|---|
-| **Encryption** | AES-256-GCM with PBKDF2-SHA256 (600k iterations) |
+| **Encryption** | AES-256-GCM with PBKDF2-SHA256 (600k iterations); fresh salt per session |
 | **Storage** | Passphrase never stored; vault unlocked once per session |
 | **Assets** | Images encrypted individually alongside the vault |
-| **Preview** | WebView runs with restrictive CSP, ephemeral session, navigation blocked |
+| **Preview** | WebView runs with nonce-based CSP, ephemeral session, navigation blocked, script tags stripped |
+| **Key material** | `ZeroizeOnDrop` on cached keys; plaintext vault JSON zeroized after encryption |
+| **File I/O** | Atomic writes (write-to-tmp-then-rename); path traversal prevention on asset IDs |
+| **Passphrase change** | Transactional all-or-nothing re-encryption of vault and all assets |
 | **Network** | Zero outbound connections |
 | **Telemetry** | None. No analytics, no tracking, no cloud sync |
+
+> **Snap sandbox note:** The snap package disables WebKit's internal bubblewrap sandbox (`WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS`) because snap's strict confinement seccomp filters block the nested bwrap calls WebKit requires. Snap's own strict confinement still sandboxes the entire application. When running from source outside the snap, WebKit retains its full internal sandbox.
 
 ---
 
@@ -191,24 +211,69 @@ snapcraft              # Build .snap package (requires snapcraft)
 │   ├── crypto.rs           # AES-256-GCM encryption, PBKDF2 key derivation
 │   ├── vault.rs            # Vault file format, JSON serialization, config
 │   ├── state.rs            # DocState, NoteItem, FolderItem, TrashItem
-│   ├── signals.rs          # Actions, event wiring, all application logic
+│   ├── signals.rs          # Theme management, CSS, utility functions
+│   ├── actions.rs          # Menu actions, toolbar signals, formatting
+│   ├── editor.rs           # Editor signals, find/replace, table editing, snippets
+│   ├── notes.rs            # Note CRUD, tabs, trash, folders, templates
+│   ├── sidebar_ops.rs      # Sidebar search, drag-and-drop, context menus
+│   ├── persistence.rs      # Vault save/load, auto-save, file monitoring
+│   ├── preview.rs          # Markdown-to-HTML, preview rendering, CSP
+│   ├── app_dialogs.rs      # Vault dialogs, passphrase change, command palette
 │   ├── style.css           # Application stylesheet
 │   └── ui/
+│       ├── mod.rs          # Module re-exports
 │       ├── types.rs        # EditorCtx, widget struct definitions
 │       ├── window.rs       # Window builder, content pane assembly
 │       ├── sidebar.rs      # Sidebar pane with search, notes list, folders
 │       ├── toolbar.rs      # Formatting toolbar
-│       └── dialogs.rs      # Help, about, shortcuts, vault dialogs
+│       └── dialogs.rs      # Help, about, shortcuts dialogs
 └── LICENSE
 ```
 
 ## Vault Format
 
-The vault is a single encrypted file (`vault.mdnb`) stored in a user-chosen folder. On disk it contains a base64-encoded blob: `salt (16 bytes) || IV (12 bytes) || AES-256-GCM ciphertext`. The plaintext is a JSON document holding the full note tree, folders, trash, open tabs, theme, sort order, templates, and version history. Image assets are stored as separate encrypted files in an `assets/` subdirectory alongside the vault.
+The vault is a single encrypted file (`vault.json`) stored in a user-chosen folder. On disk it contains a base64-encoded blob: `salt (16 bytes) || IV (12 bytes) || AES-256-GCM ciphertext`. The plaintext is a JSON document holding the full note tree, folders, trash, open tabs, theme, sort order, templates, and version history. Image assets are stored as separate encrypted files in an `assets/` subdirectory alongside the vault.
 
 ---
 
 ## Changelog
+
+### v0.2.0
+
+#### New Features
+- **Find and replace** — In-editor search with regex toggle, case sensitivity toggle, and match count display (`Ctrl+F` / `Ctrl+H`)
+- **Copy as HTML** — Copy the current note's rendered HTML to the clipboard
+- **Hemingway mode** — Disables backspace and delete for forward-only writing
+- **Smart list continuation** — Press Enter inside a list item to auto-continue with the appropriate prefix (bullets, ordered, task lists, blockquotes); pressing Enter on an empty item exits the list
+- **Focus mode** — Dims all text except the current paragraph for distraction-free editing
+- **Typewriter scrolling** — Keeps the cursor line vertically centered in the editor viewport
+- **Preview themes** — Cycle between Default, Sepia, and Solarized preview color schemes
+- **Auto-hiding header in fullscreen** — Header bar and toolbar hide in fullscreen and reappear when the mouse moves to the top edge
+- **Synchronized preview scrolling** — Editor scroll position is mirrored in the preview WebView
+- **Inline link/image tooltips** — Hover over markdown links and images in the editor to see the target URL
+- **Vault file change monitoring** — Toast notification when vault.json is modified externally
+- **Wiki-link autocomplete** — Note name suggestions appear as you type `[[`
+- **Search operators** — `tag:name`, `in:folder`, and `"quoted phrases"` in the sidebar search
+- **Change passphrase** — Re-encrypt vault and all assets with a new passphrase (transactional, all-or-nothing)
+- **Table editing** — Add rows, add columns, and auto-align markdown tables from the toolbar or command palette
+- **Trash auto-purge** — Notes in trash older than 30 days are automatically purged on startup
+- **Vault backup** — Automatic `vault.json.bak` created before each save
+- **Passphrase strength indicator** — Visual feedback during vault creation and passphrase change
+
+#### Security Improvements
+- **Nonce-based CSP** — Preview WebView uses per-render random nonces for mermaid script authorization instead of `'unsafe-inline'`; `script-src 'none'` when no mermaid content is present
+- **Script tag stripping** — `<script>` tags are stripped from markdown-generated HTML as defense-in-depth before CSP enforcement
+- **Memory zeroization** — `ZeroizeOnDrop` on `CachedKey`; plaintext vault JSON explicitly zeroized after encryption; passphrase strings zeroized after use in change-passphrase flow
+- **Atomic file writes** — Vault and asset files are written to a `.tmp` file first, then atomically renamed to prevent corruption on crash
+- **Path traversal prevention** — Asset IDs are validated against a strict allowlist (alphanumeric, hyphens, underscores, dots; no path separators, no leading dots, max 128 chars) at every filesystem access point
+- **Randomized temp filenames** — Clipboard image paste uses randomized temp file names to prevent symlink/race attacks
+- **WebView hardening** — Ephemeral network session (no persistent cookies/cache), developer extras disabled, file URL access disabled, all navigation actions blocked
+- **Transactional passphrase change** — All assets are re-encrypted to memory before any are committed to disk; failure at any point leaves the vault unchanged
+
+#### Architecture
+- Refactored monolithic `signals.rs` into focused modules: `actions.rs`, `editor.rs`, `notes.rs`, `sidebar_ops.rs`, `persistence.rs`, `preview.rs`, `app_dialogs.rs`
+- Async vault save with generation IDs to prevent stale writes from overwriting newer data
+- Background-threaded PBKDF2 key derivation to keep the UI responsive during unlock and vault creation
 
 ### v0.1.0
 - Initial release of Pithos Notebook

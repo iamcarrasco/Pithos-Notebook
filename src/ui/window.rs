@@ -71,7 +71,7 @@ pub fn build_editor(
     let ContentPaneWidgets {
         toast_overlay,
         content_toolbar_view: _content_toolbar_view,
-        content_header: _content_header,
+        content_header,
         doc_label,
         dirty_label,
         toolbar_scroll,
@@ -92,6 +92,15 @@ pub fn build_editor(
         tag_entry,
         toolbar_widgets: tb,
         content_stack,
+        find_bar,
+        find_entry,
+        replace_entry,
+        replace_row,
+        find_match_label,
+        search_context,
+        search_settings,
+        link_popover,
+        link_list_box,
     } = build_content_pane();
 
     // --- Assemble OverlaySplitView ---
@@ -161,17 +170,52 @@ pub fn build_editor(
         content_stack,
         sync_timeout_id: Rc::new(Cell::new(None)),
         search_timeout_id: Rc::new(Cell::new(None)),
+        content_header,
+        find_bar,
+        find_entry,
+        replace_entry,
+        replace_row,
+        find_match_label,
+        search_context,
+        search_settings,
+        link_popover,
+        link_list_box,
     };
 
     initialize_state(&ctx);
+
+    let purged = purge_old_trash(&mut ctx.state.borrow_mut());
 
     wire_menu_actions(&ctx);
     wire_toolbar_signals(&ctx, &tb);
     wire_sidebar_signals(&ctx, &search_entry, &notes_list);
     wire_editor_signals(&ctx, &tag_entry);
     wire_keyboard_shortcuts(&ctx, window);
+    wire_find_replace_signals(&ctx);
+    wire_link_autocomplete(&ctx);
+    wire_link_tooltips(&ctx);
+
+    // Fullscreen autohide: reveal header/toolbar when mouse is near the top edge
+    {
+        let ctx = ctx.clone();
+        let motion = gtk::EventControllerMotion::new();
+        motion.connect_motion(move |_, _, y| {
+            if ctx.state.borrow().fullscreen {
+                if y < 10.0 {
+                    ctx.content_header.set_visible(true);
+                    ctx.toolbar.set_visible(true);
+                } else if y > 100.0 {
+                    ctx.content_header.set_visible(false);
+                    ctx.toolbar.set_visible(false);
+                }
+            }
+        });
+        split_view.add_controller(motion);
+    }
+
     wire_close_request(&ctx);
     setup_auto_save(&ctx);
+    watch_vault_file(&ctx);
 
     // Wire AdwTabView signals
     {
@@ -270,6 +314,11 @@ pub fn build_editor(
         });
     }
 
+    if purged > 0 {
+        send_toast(&ctx, &format!("Purged {purged} old item(s) from trash"));
+        trigger_vault_save(&ctx);
+    }
+
     window.set_content(Some(&split_view));
 }
 
@@ -348,9 +397,109 @@ pub fn build_content_pane() -> ContentPaneWidgets {
     tab_bar.set_autohide(false);
     content_box.append(&tab_bar);
 
+    // --- Find/replace bar (hidden by default) ---
+    let find_bar = gtk::Box::new(gtk::Orientation::Vertical, 4);
+    find_bar.set_margin_start(8);
+    find_bar.set_margin_end(8);
+    find_bar.set_margin_top(4);
+    find_bar.set_margin_bottom(4);
+    find_bar.set_visible(false);
+
+    let find_row = gtk::Box::new(gtk::Orientation::Horizontal, 4);
+    let find_entry = gtk::SearchEntry::new();
+    find_entry.set_hexpand(true);
+    find_entry.set_placeholder_text(Some("Find\u{2026}"));
+    let find_match_label = gtk::Label::new(None);
+    find_match_label.add_css_class("dim-label");
+    find_match_label.add_css_class("caption");
+    let find_prev_btn = gtk::Button::from_icon_name("go-up-symbolic");
+    find_prev_btn.add_css_class("flat");
+    find_prev_btn.set_tooltip_text(Some("Previous (Shift+Enter)"));
+    find_prev_btn.set_action_name(Some("win.find-prev"));
+    let find_next_btn = gtk::Button::from_icon_name("go-down-symbolic");
+    find_next_btn.add_css_class("flat");
+    find_next_btn.set_tooltip_text(Some("Next (Enter)"));
+    find_next_btn.set_action_name(Some("win.find-next"));
+    let find_close_btn = gtk::Button::from_icon_name("window-close-symbolic");
+    find_close_btn.add_css_class("flat");
+    find_close_btn.set_tooltip_text(Some("Close (Escape)"));
+    find_close_btn.set_action_name(Some("win.hide-find"));
+    let case_toggle = gtk::ToggleButton::new();
+    case_toggle.set_label("Aa");
+    case_toggle.add_css_class("flat");
+    case_toggle.set_tooltip_text(Some("Case sensitive"));
+    let regex_toggle = gtk::ToggleButton::new();
+    regex_toggle.set_label(".*");
+    regex_toggle.add_css_class("flat");
+    regex_toggle.set_tooltip_text(Some("Regular expression"));
+    find_row.append(&find_entry);
+    find_row.append(&find_match_label);
+    find_row.append(&case_toggle);
+    find_row.append(&regex_toggle);
+    find_row.append(&find_prev_btn);
+    find_row.append(&find_next_btn);
+    find_row.append(&find_close_btn);
+    find_bar.append(&find_row);
+
+    let replace_row = gtk::Box::new(gtk::Orientation::Horizontal, 4);
+    replace_row.set_visible(false);
+    let replace_entry = gtk::Entry::new();
+    replace_entry.set_hexpand(true);
+    replace_entry.set_placeholder_text(Some("Replace\u{2026}"));
+    let replace_btn = gtk::Button::with_label("Replace");
+    replace_btn.add_css_class("flat");
+    replace_btn.set_action_name(Some("win.replace-one"));
+    let replace_all_btn = gtk::Button::with_label("Replace All");
+    replace_all_btn.add_css_class("flat");
+    replace_all_btn.set_action_name(Some("win.replace-all"));
+    replace_row.append(&replace_entry);
+    replace_row.append(&replace_btn);
+    replace_row.append(&replace_all_btn);
+    find_bar.append(&replace_row);
+
+    content_box.append(&find_bar);
+
     // Editor panes: source editor (left) + WebView preview (right)
     let (source_buffer, source_view, source_scroll) = build_source_editor();
     let (preview_webview, preview_scroll) = build_preview_pane();
+
+    // Search context for find/replace (attached to source buffer)
+    let search_settings = sourceview::SearchSettings::builder()
+        .wrap_around(true)
+        .build();
+    let search_context = sourceview::SearchContext::builder()
+        .buffer(&source_buffer)
+        .settings(&search_settings)
+        .highlight(true)
+        .build();
+
+    // Wire case-sensitivity toggle
+    {
+        let settings = search_settings.clone();
+        case_toggle.connect_toggled(move |btn| {
+            settings.set_case_sensitive(btn.is_active());
+        });
+    }
+    // Wire regex toggle
+    {
+        let settings = search_settings.clone();
+        regex_toggle.connect_toggled(move |btn| {
+            settings.set_regex_enabled(btn.is_active());
+        });
+    }
+
+    // Link autocomplete popover
+    let link_list_box = gtk::ListBox::new();
+    link_list_box.add_css_class("navigation-sidebar");
+    let link_scroll = gtk::ScrolledWindow::builder()
+        .child(&link_list_box)
+        .max_content_height(200)
+        .propagate_natural_height(true)
+        .build();
+    let link_popover = gtk::Popover::new();
+    link_popover.set_child(Some(&link_scroll));
+    link_popover.set_parent(&source_view);
+    link_popover.set_autohide(false);
 
     let split = gtk::Paned::new(gtk::Orientation::Horizontal);
     split.set_wide_handle(true);
@@ -441,6 +590,15 @@ pub fn build_content_pane() -> ContentPaneWidgets {
         tag_entry,
         toolbar_widgets: tb,
         content_stack,
+        find_bar,
+        find_entry,
+        replace_entry,
+        replace_row,
+        find_match_label,
+        search_context,
+        search_settings,
+        link_popover,
+        link_list_box,
     }
 }
 
@@ -485,7 +643,12 @@ pub fn build_source_editor() -> (sourceview::Buffer, sourceview::View, gtk::Scro
 pub fn build_preview_pane() -> (webkit6::WebView, gtk::Box) {
     use webkit6::prelude::*;
 
-    let webview = webkit6::WebView::new();
+    // Use an ephemeral network session so no cookies, cache, or local storage
+    // persist to disk — the preview is a disposable render surface.
+    let ephemeral_session = webkit6::NetworkSession::new_ephemeral();
+    let webview = webkit6::WebView::builder()
+        .network_session(&ephemeral_session)
+        .build();
 
     // Security: disable features we don't need
     let settings = webkit6::prelude::WebViewExt::settings(&webview);
@@ -496,19 +659,13 @@ pub fn build_preview_pane() -> (webkit6::WebView, gtk::Box) {
         settings.set_allow_universal_access_from_file_urls(false);
     }
 
-    // Block user-initiated navigation (link clicks) — preview is read-only.
-    // Allow programmatic loads (load_html) so the preview can render.
+    // Block ALL navigation in the preview WebView.
+    // load_html() does not trigger decide-policy, so this only blocks
+    // link clicks, form submissions, redirects, and script-initiated navigations.
     webview.connect_decide_policy(|_webview, decision, decision_type| {
         if decision_type == webkit6::PolicyDecisionType::NavigationAction {
-            if let Some(nav_decision) = decision.downcast_ref::<webkit6::NavigationPolicyDecision>() {
-                let nav_action = nav_decision.navigation_action();
-                if let Some(mut action) = nav_action {
-                    if action.navigation_type() != webkit6::NavigationType::Other {
-                        decision.ignore();
-                        return true;
-                    }
-                }
-            }
+            decision.ignore();
+            return true;
         }
         false
     });

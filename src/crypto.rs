@@ -37,12 +37,15 @@ fn derive_key(passphrase: &str, salt: &[u8]) -> [u8; KEY_LEN] {
 
 /// A cached encryption key — derives the expensive PBKDF2 key once, reuses for all saves.
 /// The salt is fixed per session; a fresh random IV is generated for each encryption.
+/// The passphrase is retained so assets encrypted with different salts can be decrypted
+/// by re-deriving the key from the asset's stored salt.
 /// Key material is securely zeroed when dropped.
 #[derive(Clone, ZeroizeOnDrop)]
 pub struct CachedKey {
     #[zeroize(skip)]
     salt: [u8; SALT_LEN],
     key: [u8; KEY_LEN],
+    passphrase: String,
 }
 
 impl std::fmt::Debug for CachedKey {
@@ -60,12 +63,12 @@ impl CachedKey {
         let mut salt = [0u8; SALT_LEN];
         rand::thread_rng().fill_bytes(&mut salt);
         let key = derive_key(passphrase, &salt);
-        CachedKey { key, salt }
+        CachedKey { key, salt, passphrase: passphrase.to_string() }
     }
 
     /// Construct from already-derived key material (zero cost).
-    pub fn from_raw(key: [u8; KEY_LEN], salt: [u8; SALT_LEN]) -> Self {
-        CachedKey { key, salt }
+    pub fn from_raw(key: [u8; KEY_LEN], salt: [u8; SALT_LEN], passphrase: &str) -> Self {
+        CachedKey { key, salt, passphrase: passphrase.to_string() }
     }
 }
 
@@ -100,8 +103,9 @@ fn encrypt_with_key(
     Ok(format!(r#"{{"encrypted":true,"data":"{b64}"}}"#))
 }
 
-/// Decrypt vault and return the derived CachedKey for reuse in future encryptions.
-/// Avoids a second PBKDF2 derivation after unlock.
+/// Decrypt vault and derive a fresh CachedKey for future saves.
+/// Uses the stored salt to decrypt, then generates a new random salt and
+/// re-derives the key so each session writes with a unique salt.
 pub fn decrypt_vault_returning_key(
     encrypted_json: &str,
     passphrase: &str,
@@ -154,10 +158,9 @@ pub fn decrypt_vault_returning_key(
     let plaintext_str =
         String::from_utf8(plaintext).map_err(|e| CryptoError::DecryptionFailed(e.to_string()))?;
 
-    // Reuse the same salt+key for future encryptions
-    let mut salt_arr = [0u8; SALT_LEN];
-    salt_arr.copy_from_slice(salt);
-    let cached = CachedKey::from_raw(key, salt_arr);
+    // Derive a fresh key with a new random salt for this session's saves.
+    // This ensures each lock/unlock cycle writes with a unique salt.
+    let cached = CachedKey::derive(passphrase);
 
     Ok((plaintext_str, cached))
 }
@@ -186,6 +189,8 @@ pub fn encrypt_asset(data: &[u8], cached: &CachedKey) -> Result<String, CryptoEr
 
 /// Decrypt binary asset bytes using a cached key.
 /// If bytes are not in encrypted envelope format, returns the original bytes.
+/// Re-derives the key from the asset's stored salt to handle assets encrypted
+/// in prior sessions with different salts.
 pub fn decrypt_asset(data: &[u8], cached: &CachedKey) -> Result<Vec<u8>, CryptoError> {
     let Ok(as_text) = std::str::from_utf8(data) else {
         // Raw binary asset (unencrypted fallback)
@@ -218,10 +223,13 @@ pub fn decrypt_asset(data: &[u8], cached: &CachedKey) -> Result<Vec<u8>, CryptoE
         return Err(CryptoError::InvalidData("Encrypted asset data too short".into()));
     }
 
+    let asset_salt = &combined[..SALT_LEN];
     let iv = &combined[SALT_LEN..SALT_LEN + IV_LEN];
     let ciphertext = &combined[SALT_LEN + IV_LEN..];
 
-    let cipher = Aes256Gcm::new_from_slice(&cached.key)
+    // Re-derive key from the asset's stored salt (may differ from cached session salt)
+    let key = derive_key(&cached.passphrase, asset_salt);
+    let cipher = Aes256Gcm::new_from_slice(&key)
         .map_err(|e| CryptoError::DecryptionFailed(e.to_string()))?;
     let nonce = Nonce::from_slice(iv);
     cipher

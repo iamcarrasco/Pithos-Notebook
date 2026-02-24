@@ -34,6 +34,8 @@ pub struct VaultData {
     pub sidebar_width: i32,
     #[serde(default)]
     pub assets: HashMap<String, AssetMeta>,
+    #[serde(default)]
+    pub preview_theme: String,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -130,6 +132,14 @@ pub fn vault_file_path(vault_folder: &str) -> PathBuf {
     Path::new(vault_folder).join("vault.json")
 }
 
+/// Copy vault.json to vault.json.bak before each save (best-effort).
+pub fn backup_vault(vault_folder: &str) {
+    let src = vault_file_path(vault_folder);
+    if src.exists() {
+        let _ = fs::copy(&src, src.with_extension("json.bak"));
+    }
+}
+
 pub fn read_vault_raw(vault_folder: &str) -> io::Result<Option<String>> {
     let path = vault_file_path(vault_folder);
     if !path.exists() {
@@ -146,9 +156,8 @@ pub fn write_vault_raw(vault_folder: &str, data: &str) -> io::Result<()> {
 fn atomic_write(target: &Path, data: &[u8]) -> io::Result<()> {
     let tmp = target.with_extension("tmp");
     fs::write(&tmp, data)?;
-    fs::rename(&tmp, target).map_err(|e| {
+    fs::rename(&tmp, target).inspect_err(|_| {
         let _ = fs::remove_file(&tmp); // Best-effort cleanup of temp file
-        e
     })
 }
 
@@ -156,7 +165,25 @@ pub fn assets_dir(vault_folder: &str) -> PathBuf {
     Path::new(vault_folder).join("assets")
 }
 
+/// Validate that an asset ID is safe for use as a filename.
+/// Rejects path traversal components (/, .., .), empty IDs, and control characters.
+/// Only allows alphanumeric chars, hyphens, underscores, and dots (not leading).
+pub fn is_valid_asset_id(id: &str) -> bool {
+    if id.is_empty() || id.len() > 128 {
+        return false;
+    }
+    // Reject any path separator or traversal
+    if id.contains('/') || id.contains('\\') || id == "." || id == ".." || id.starts_with('.') {
+        return false;
+    }
+    // Only allow safe characters: alphanumeric, hyphen, underscore, dot
+    id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == '.')
+}
+
 pub fn write_asset(vault_folder: &str, asset_id: &str, data: &[u8]) -> io::Result<()> {
+    if !is_valid_asset_id(asset_id) {
+        return Err(io::Error::new(io::ErrorKind::InvalidInput, "Invalid asset ID"));
+    }
     let dir = assets_dir(vault_folder);
     fs::create_dir_all(&dir)?;
     atomic_write(&dir.join(asset_id), data)
@@ -291,6 +318,7 @@ pub fn doc_state_to_vault(state: &DocState) -> VaultData {
         custom_templates,
         sidebar_width: state.sidebar_width,
         assets: state.assets.clone(),
+        preview_theme: state.preview_theme.clone(),
     }
 }
 
@@ -478,6 +506,11 @@ pub fn vault_to_doc_state(vault: VaultData) -> DocState {
         filter_tags: Vec::new(),
         tag_filter_and: false,
         sidebar_width: if vault.sidebar_width > 0 { vault.sidebar_width } else { 300 },
+        hemingway_mode: false,
+        focus_mode: false,
+        typewriter_scrolling: false,
+        preview_theme: if vault.preview_theme.is_empty() { "default".to_string() } else { vault.preview_theme },
+        spellcheck_enabled: false,
 
         last_undo_push: std::time::Instant::now(),
         assets: vault.assets,
@@ -658,6 +691,7 @@ mod tests {
             custom_templates: vec![],
             sidebar_width: 250,
             assets: HashMap::new(),
+            preview_theme: "sepia".to_string(),
         };
 
         let state = vault_to_doc_state(vault);
@@ -682,5 +716,6 @@ mod tests {
         assert_eq!(state.sort_order, SortOrder::NameAsc);
         assert_eq!(state.sidebar_width, 250);
         assert_eq!(state.next_note_seq, 10);
+        assert_eq!(state.preview_theme, "sepia");
     }
 }

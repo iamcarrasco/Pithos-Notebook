@@ -60,3 +60,23 @@
 .folder-row-count {
   font-size: 0.85em;
 }
+
+/* Table size grid picker */
+.table-grid-cell {
+  min-width: 24px;
+  min-height: 24px;
+  padding: 0;
+  border-radius: 3px;
+  background: alpha(@window_fg_color, 0.08);
+}
+
+.table-grid-cell.hovered {
+  background: alpha(@accent_bg_color, 0.45);
+}
+
+.table-grid-label {
+  font-size: 1.6em;
+  font-weight: bold;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.7;
+}

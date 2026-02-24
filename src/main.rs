@@ -6,6 +6,20 @@ mod ui;
 use ui::*;
 mod signals;
 pub use signals::*;
+mod preview;
+pub use preview::*;
+mod editor;
+pub use editor::*;
+mod persistence;
+pub use persistence::*;
+mod notes;
+pub use notes::*;
+mod sidebar_ops;
+pub use sidebar_ops::*;
+mod actions;
+pub use actions::*;
+mod app_dialogs;
+pub use app_dialogs::*;
 
 use adw::prelude::*;
 use gtk::gdk;
@@ -35,7 +49,6 @@ fn main() {
 // ---------------------------------------------------------------------------
 // UI building — decomposed into focused helpers
 // ---------------------------------------------------------------------------
-
 
 
 

@@ -110,6 +110,7 @@ pub fn build_sidebar_menu() -> gtk::gio::Menu {
     let section1 = gtk::gio::Menu::new();
     section1.append(Some("New Folder"), Some("win.new-folder"));
     section1.append(Some("New from Template\u{2026}"), Some("win.new-from-template"));
+    section1.append(Some("Daily Note"), Some("win.daily-note"));
     section1.append(Some("View Trash"), Some("win.view-trash"));
     menu.append_section(None, &section1);
 

@@ -53,6 +53,23 @@
   </requires>
 
   <releases>
+    <release version="0.2.0" date="2026-02-24">
+      <description>
+        <p>Major feature release with 12 new features and security hardening.</p>
+        <ul>
+          <li>Find and replace with regex toggle and match count</li>
+          <li>Focus mode, Hemingway mode, and typewriter scrolling</li>
+          <li>Smart list continuation for bullets, ordered lists, and task lists</li>
+          <li>Preview themes (Default, Sepia, Solarized) and synchronized scrolling</li>
+          <li>Auto-hiding header in fullscreen</li>
+          <li>Wiki-link autocomplete, inline link tooltips, and search operators</li>
+          <li>Table editing (add rows, columns, auto-align)</li>
+          <li>Change passphrase with transactional asset re-encryption</li>
+          <li>Copy as HTML, vault file monitoring, trash auto-purge</li>
+          <li>Nonce-based CSP, memory zeroization, atomic writes, path traversal prevention</li>
+        </ul>
+      </description>
+    </release>
     <release version="0.1.1" date="2025-02-22">
       <description>
         <p>Encrypted image storage, export fix, save notification fix.</p>
