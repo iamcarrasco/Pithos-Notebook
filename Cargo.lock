@@ -744,7 +744,7 @@ checksum = "3b3cff922bd51709b605d9ead9aa71031d81447142d828eb4a6eba76fe619f9b"
 
 [[package]]
 name = "pithos-core"
-version = "0.3.0"
+version = "0.2.0"
 dependencies = [
  "aes-gcm",
  "base64",
@@ -761,7 +761,7 @@ dependencies = [
 
 [[package]]
 name = "pithos-gtk"
-version = "0.3.0"
+version = "0.2.0"
 dependencies = [
  "base64",
  "gdk-pixbuf",
