@@ -61,6 +61,8 @@ pub struct EditorCtx {
     pub search_settings: sourceview::SearchSettings,
     // Vault name display
     pub vault_name_label: gtk::Label,
+    // Timestamp of last completed vault save (used by file monitor to suppress own-write toasts)
+    pub last_save_completed: Rc<Cell<std::time::Instant>>,
 }
 
 pub struct ContentPaneWidgets {

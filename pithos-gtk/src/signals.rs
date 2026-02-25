@@ -210,19 +210,11 @@ pub fn is_dark_active() -> bool {
 }
 
 pub fn toggle_theme(ctx: &EditorCtx) {
-    let new_theme = {
-        let state = ctx.state.borrow();
-        match state.theme.as_str() {
-            "system" => "light",
-            "light" => "dark",
-            _ => "system",
-        }
-        .to_string()
-    };
-    apply_theme(&new_theme);
+    let new_theme = if is_dark_active() { "light" } else { "dark" };
+    apply_theme(new_theme);
     apply_sourceview_theme(&ctx.source_view, is_dark_active());
     render_preview(ctx);
-    ctx.state.borrow_mut().theme = new_theme;
+    ctx.state.borrow_mut().theme = new_theme.to_string();
     trigger_vault_save(ctx);
 }
 

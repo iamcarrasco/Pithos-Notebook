@@ -179,6 +179,7 @@ pub fn build_editor(
         search_context,
         search_settings,
         vault_name_label,
+        last_save_completed: Rc::new(Cell::new(std::time::Instant::now())),
     };
 
     initialize_state(&ctx);

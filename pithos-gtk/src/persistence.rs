@@ -1,5 +1,5 @@
 use adw::prelude::*;
-use std::{cell::Cell, fs, path::PathBuf, rc::Rc};
+use std::{fs, path::PathBuf};
 use pithos_core::state::*;
 use pithos_core::crypto;
 use pithos_core::vault;
@@ -348,6 +348,7 @@ pub fn perform_vault_save_async(ctx: &EditorCtx, toast: bool) {
         match rx.try_recv() {
             Ok(Ok(())) => {
                 ctx.saving.set(false);
+                ctx.last_save_completed.set(std::time::Instant::now());
                 // Only mark clean if no new edits happened during save
                 let current = current_markdown(&ctx);
                 {
@@ -421,28 +422,12 @@ pub fn watch_vault_file(ctx: &EditorCtx) {
     };
 
     let ctx = ctx.clone();
-    let last_own_save = Rc::new(Cell::new(std::time::Instant::now()));
-    // Record our save times so we can distinguish own vs external changes
-    let save_marker = last_own_save.clone();
-    let save_gen = ctx.save_generation.clone();
-    // Poll save_generation changes to update the marker
-    {
-        let save_gen = save_gen.clone();
-        let save_marker = save_marker.clone();
-        let mut prev_gen = save_gen.get();
-        glib::timeout_add_local(std::time::Duration::from_millis(200), move || {
-            let cur = save_gen.get();
-            if cur != prev_gen {
-                prev_gen = cur;
-                save_marker.set(std::time::Instant::now());
-            }
-            glib::ControlFlow::Continue
-        });
-    }
     monitor.connect_changed(move |_, _, _, event| {
         if event == gtk::gio::FileMonitorEvent::ChangesDoneHint {
-            // Ignore changes within 3 seconds of our own save
-            if last_own_save.get().elapsed() < std::time::Duration::from_secs(3) { return; }
+            // Ignore changes within 3 seconds of our own save completing,
+            // or while a save is still in flight
+            if ctx.saving.get() { return; }
+            if ctx.last_save_completed.get().elapsed() < std::time::Duration::from_secs(3) { return; }
             send_toast(&ctx, "Vault changed externally");
         }
     });
