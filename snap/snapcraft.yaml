@@ -70,6 +70,7 @@ parts:
     plugin: rust
     source: .
     rust-channel: stable
+    rust-path: ["pithos-gtk"]
     build-packages:
       - pkg-config
       - libgtk-4-dev

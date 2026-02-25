@@ -743,22 +743,35 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3b3cff922bd51709b605d9ead9aa71031d81447142d828eb4a6eba76fe619f9b"
 
 [[package]]
-name = "pithos-notebook"
-version = "0.2.0"
+name = "pithos-core"
+version = "0.3.0"
 dependencies = [
  "aes-gcm",
  "base64",
  "dirs",
- "gdk-pixbuf",
- "gtk4",
  "hmac",
- "libadwaita",
  "pbkdf2",
  "pulldown-cmark",
  "rand",
  "serde",
  "serde_json",
  "sha2",
+ "zeroize",
+]
+
+[[package]]
+name = "pithos-gtk"
+version = "0.3.0"
+dependencies = [
+ "base64",
+ "gdk-pixbuf",
+ "gtk4",
+ "libadwaita",
+ "pithos-core",
+ "pulldown-cmark",
+ "rand",
+ "serde",
+ "serde_json",
  "sourceview5",
  "webkit6",
  "zeroize",

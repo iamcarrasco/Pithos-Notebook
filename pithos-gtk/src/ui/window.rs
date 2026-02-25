@@ -3,8 +3,9 @@ use sourceview5::prelude::*;
 use sourceview5 as sourceview;
 use std::{cell::Cell, cell::RefCell, rc::Rc};
 
-use crate::crypto;
-use crate::vault;
+use pithos_core::crypto;
+use pithos_core::vault;
+use pithos_core::state::*;
 use crate::ui::types::*;
 use crate::*; // For everything left in main.rs temporarily
 
@@ -99,8 +100,7 @@ pub fn build_editor(
         find_match_label,
         search_context,
         search_settings,
-        link_popover,
-        link_list_box,
+        vault_name_label,
     } = build_content_pane();
 
     // --- Assemble OverlaySplitView ---
@@ -178,8 +178,7 @@ pub fn build_editor(
         find_match_label,
         search_context,
         search_settings,
-        link_popover,
-        link_list_box,
+        vault_name_label,
     };
 
     initialize_state(&ctx);
@@ -192,8 +191,6 @@ pub fn build_editor(
     wire_editor_signals(&ctx, &tag_entry);
     wire_keyboard_shortcuts(&ctx, window);
     wire_find_replace_signals(&ctx);
-    wire_link_autocomplete(&ctx);
-    wire_link_tooltips(&ctx);
 
     // Fullscreen autohide: reveal header/toolbar when mouse is near the top edge
     {
@@ -330,11 +327,16 @@ pub fn build_content_pane() -> ContentPaneWidgets {
 
     // Start: sidebar toggle
     let content_sidebar_toggle = gtk::Button::from_icon_name("sidebar-show-symbolic");
-    content_sidebar_toggle.set_tooltip_text(Some("Toggle sidebar (Ctrl+\\)"));
+    content_sidebar_toggle.set_tooltip_text(Some("Toggle Sidebar (Ctrl+\\)"));
     content_sidebar_toggle.add_css_class("flat");
     content_sidebar_toggle.set_action_name(Some("win.toggle-sidebar"));
-    set_accessible_label(&content_sidebar_toggle, "Toggle sidebar");
+    set_accessible_label(&content_sidebar_toggle, "Toggle Sidebar");
     content_header.pack_start(&content_sidebar_toggle);
+
+    // Vault name label (shown in header bar after sidebar toggle)
+    let vault_name_label = gtk::Label::new(None);
+    vault_name_label.add_css_class("dim-label");
+    content_header.pack_start(&vault_name_label);
 
     // Title widget: doc name + dirty indicator
     let title_box = gtk::Box::new(gtk::Orientation::Horizontal, 4);
@@ -351,17 +353,17 @@ pub fn build_content_pane() -> ContentPaneWidgets {
 
     // End: theme toggle + primary menu
     let theme_toggle = gtk::Button::from_icon_name("weather-clear-night-symbolic");
-    theme_toggle.set_tooltip_text(Some("Toggle dark/light mode (Ctrl+Shift+D)"));
+    theme_toggle.set_tooltip_text(Some("Toggle Theme (Ctrl+Shift+D)"));
     theme_toggle.add_css_class("flat");
     theme_toggle.set_action_name(Some("win.toggle-theme"));
-    set_accessible_label(&theme_toggle, "Toggle dark mode");
+    set_accessible_label(&theme_toggle, "Toggle Theme");
     content_header.pack_end(&theme_toggle);
 
     let content_menu_btn = gtk::MenuButton::new();
     content_menu_btn.set_icon_name("open-menu-symbolic");
-    content_menu_btn.set_tooltip_text(Some("Primary menu"));
+    content_menu_btn.set_tooltip_text(Some("Main Menu"));
     content_menu_btn.add_css_class("flat");
-    set_accessible_label(&content_menu_btn, "Primary menu");
+    set_accessible_label(&content_menu_btn, "Main Menu");
     content_menu_btn.set_menu_model(Some(&build_content_menu()));
     content_header.pack_end(&content_menu_btn);
 
@@ -414,24 +416,24 @@ pub fn build_content_pane() -> ContentPaneWidgets {
     find_match_label.add_css_class("caption");
     let find_prev_btn = gtk::Button::from_icon_name("go-up-symbolic");
     find_prev_btn.add_css_class("flat");
-    find_prev_btn.set_tooltip_text(Some("Previous (Shift+Enter)"));
+    find_prev_btn.set_tooltip_text(Some("Previous Match (Shift+Enter)"));
     find_prev_btn.set_action_name(Some("win.find-prev"));
     let find_next_btn = gtk::Button::from_icon_name("go-down-symbolic");
     find_next_btn.add_css_class("flat");
-    find_next_btn.set_tooltip_text(Some("Next (Enter)"));
+    find_next_btn.set_tooltip_text(Some("Next Match (Enter)"));
     find_next_btn.set_action_name(Some("win.find-next"));
     let find_close_btn = gtk::Button::from_icon_name("window-close-symbolic");
     find_close_btn.add_css_class("flat");
-    find_close_btn.set_tooltip_text(Some("Close (Escape)"));
+    find_close_btn.set_tooltip_text(Some("Close Find (Escape)"));
     find_close_btn.set_action_name(Some("win.hide-find"));
     let case_toggle = gtk::ToggleButton::new();
     case_toggle.set_label("Aa");
     case_toggle.add_css_class("flat");
-    case_toggle.set_tooltip_text(Some("Case sensitive"));
+    case_toggle.set_tooltip_text(Some("Case Sensitive"));
     let regex_toggle = gtk::ToggleButton::new();
     regex_toggle.set_label(".*");
     regex_toggle.add_css_class("flat");
-    regex_toggle.set_tooltip_text(Some("Regular expression"));
+    regex_toggle.set_tooltip_text(Some("Regular Expression"));
     find_row.append(&find_entry);
     find_row.append(&find_match_label);
     find_row.append(&case_toggle);
@@ -488,19 +490,6 @@ pub fn build_content_pane() -> ContentPaneWidgets {
         });
     }
 
-    // Link autocomplete popover
-    let link_list_box = gtk::ListBox::new();
-    link_list_box.add_css_class("navigation-sidebar");
-    let link_scroll = gtk::ScrolledWindow::builder()
-        .child(&link_list_box)
-        .max_content_height(200)
-        .propagate_natural_height(true)
-        .build();
-    let link_popover = gtk::Popover::new();
-    link_popover.set_child(Some(&link_scroll));
-    link_popover.set_parent(&source_view);
-    link_popover.set_autohide(false);
-
     let split = gtk::Paned::new(gtk::Orientation::Horizontal);
     split.set_wide_handle(true);
     split.set_position(600);
@@ -547,7 +536,7 @@ pub fn build_content_pane() -> ContentPaneWidgets {
     let empty_page = adw::StatusPage::builder()
         .icon_name("document-new-symbolic")
         .title("No Notes")
-        .description("Create a new note to get started.")
+        .description("Create a new note to get started")
         .build();
     let empty_btn = gtk::Button::with_label("New Note");
     empty_btn.add_css_class("suggested-action");
@@ -597,8 +586,7 @@ pub fn build_content_pane() -> ContentPaneWidgets {
         find_match_label,
         search_context,
         search_settings,
-        link_popover,
-        link_list_box,
+        vault_name_label,
     }
 }
 
@@ -710,7 +698,7 @@ pub fn build_tags_popover() -> (gtk::Popover, gtk::FlowBox, gtk::Entry) {
     vbox.append(&flow);
 
     let entry = gtk::Entry::new();
-    entry.set_placeholder_text(Some("Add tag and press Enter"));
+    entry.set_placeholder_text(Some("Add tag and press Enter\u{2026}"));
     entry.set_width_chars(24);
     vbox.append(&entry);
 
