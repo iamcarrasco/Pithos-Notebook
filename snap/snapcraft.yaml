@@ -66,6 +66,9 @@ layout:
   # libproxy uses an absolute backend path under /usr/lib/.../libproxy.
   /usr/lib/x86_64-linux-gnu/libproxy:
     bind: $SNAP/gnome-platform/usr/lib/x86_64-linux-gnu/libproxy
+  # Pandoc looks for templates and data at its compiled-in /usr/share/pandoc path.
+  /usr/share/pandoc:
+    bind: $SNAP/usr/share/pandoc
 
 parts:
   typst:
