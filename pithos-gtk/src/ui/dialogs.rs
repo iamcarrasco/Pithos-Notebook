@@ -65,7 +65,7 @@ pub fn show_shortcuts_window(parent: &adw::ApplicationWindow) {
 pub fn show_about_dialog(parent: &adw::ApplicationWindow) {
     let dialog = adw::AboutDialog::new();
     dialog.set_application_name("Pithos Notebook");
-    dialog.set_version("0.2.0");
+    dialog.set_version("0.2.5");
     dialog.set_developer_name("iamcarrasco");
     dialog.set_license_type(gtk::License::Gpl30);
     dialog.set_comments("A private, offline, encrypted Markdown notebook");
@@ -99,9 +99,7 @@ pub fn show_help_dialog(parent: &adw::ApplicationWindow) {
 }
 
 // ── Main help page ────────────────────────────────────────────
-fn build_help_main_page(
-    nav_view: &adw::NavigationView,
-) -> adw::NavigationPage {
+fn build_help_main_page(nav_view: &adw::NavigationView) -> adw::NavigationPage {
     let vbox = gtk::Box::new(gtk::Orientation::Vertical, 16);
     vbox.set_margin_start(16);
     vbox.set_margin_end(16);
@@ -111,7 +109,7 @@ fn build_help_main_page(
     // Brief intro
     let intro = gtk::Label::new(Some(
         "Pithos Notebook is a private, offline, encrypted Markdown notebook. \
-         All your notes are stored in a single AES-256 encrypted vault file."
+         All your notes are stored in a single AES-256 encrypted vault file.",
     ));
     intro.set_wrap(true);
     intro.set_xalign(0.0);
@@ -124,10 +122,20 @@ fn build_help_main_page(
     list_gs.add_css_class("boxed-list");
     list_gs.set_selection_mode(gtk::SelectionMode::None);
 
-    append_nav_row(&list_gs, "Vault &amp; Encryption", "security-high-symbolic", nav_view,
-        build_vault_page);
-    append_nav_row(&list_gs, "Creating Notes", "document-new-symbolic", nav_view,
-        build_notes_page);
+    append_nav_row(
+        &list_gs,
+        "Vault &amp; Encryption",
+        "security-high-symbolic",
+        nav_view,
+        build_vault_page,
+    );
+    append_nav_row(
+        &list_gs,
+        "Creating Notes",
+        "document-new-symbolic",
+        nav_view,
+        build_notes_page,
+    );
 
     vbox.append(&section_getting_started);
     vbox.append(&list_gs);
@@ -138,12 +146,27 @@ fn build_help_main_page(
     list_ed.add_css_class("boxed-list");
     list_ed.set_selection_mode(gtk::SelectionMode::None);
 
-    append_nav_row(&list_ed, "Formatting", "format-text-bold-symbolic", nav_view,
-        build_formatting_page);
-    append_nav_row(&list_ed, "Code Blocks", "utilities-terminal-symbolic", nav_view,
-        build_code_blocks_page);
-    append_nav_row(&list_ed, "Tables", "view-grid-symbolic", nav_view,
-        build_tables_page);
+    append_nav_row(
+        &list_ed,
+        "Formatting",
+        "format-text-bold-symbolic",
+        nav_view,
+        build_formatting_page,
+    );
+    append_nav_row(
+        &list_ed,
+        "Code Blocks",
+        "utilities-terminal-symbolic",
+        nav_view,
+        build_code_blocks_page,
+    );
+    append_nav_row(
+        &list_ed,
+        "Tables",
+        "view-grid-symbolic",
+        nav_view,
+        build_tables_page,
+    );
 
     vbox.append(&section_editor);
     vbox.append(&list_ed);
@@ -154,10 +177,20 @@ fn build_help_main_page(
     list_org.add_css_class("boxed-list");
     list_org.set_selection_mode(gtk::SelectionMode::None);
 
-    append_nav_row(&list_org, "Folders &amp; Tags", "folder-symbolic", nav_view,
-        build_folders_tags_page);
-    append_nav_row(&list_org, "Search &amp; Daily Notes", "edit-find-symbolic", nav_view,
-        build_search_page);
+    append_nav_row(
+        &list_org,
+        "Folders &amp; Tags",
+        "folder-symbolic",
+        nav_view,
+        build_folders_tags_page,
+    );
+    append_nav_row(
+        &list_org,
+        "Search &amp; Daily Notes",
+        "edit-find-symbolic",
+        nav_view,
+        build_search_page,
+    );
 
     vbox.append(&section_org);
     vbox.append(&list_org);
@@ -168,12 +201,27 @@ fn build_help_main_page(
     list_adv.add_css_class("boxed-list");
     list_adv.set_selection_mode(gtk::SelectionMode::None);
 
-    append_nav_row(&list_adv, "Snapshots &amp; History", "document-open-recent-symbolic", nav_view,
-        build_snapshots_page);
-    append_nav_row(&list_adv, "Import &amp; Export", "document-save-as-symbolic", nav_view,
-        build_import_export_page);
-    append_nav_row(&list_adv, "Backlinks", "emblem-symbolic-link-symbolic", nav_view,
-        build_backlinks_page);
+    append_nav_row(
+        &list_adv,
+        "Snapshots &amp; History",
+        "document-open-recent-symbolic",
+        nav_view,
+        build_snapshots_page,
+    );
+    append_nav_row(
+        &list_adv,
+        "Import &amp; Export",
+        "document-save-as-symbolic",
+        nav_view,
+        build_import_export_page,
+    );
+    append_nav_row(
+        &list_adv,
+        "Backlinks",
+        "emblem-symbolic-link-symbolic",
+        nav_view,
+        build_backlinks_page,
+    );
 
     vbox.append(&section_adv);
     vbox.append(&list_adv);
@@ -184,8 +232,13 @@ fn build_help_main_page(
     list_kbd.add_css_class("boxed-list");
     list_kbd.set_selection_mode(gtk::SelectionMode::None);
 
-    append_nav_row(&list_kbd, "Keyboard Shortcuts", "preferences-desktop-keyboard-symbolic", nav_view,
-        build_shortcuts_page);
+    append_nav_row(
+        &list_kbd,
+        "Keyboard Shortcuts",
+        "preferences-desktop-keyboard-symbolic",
+        nav_view,
+        build_shortcuts_page,
+    );
 
     vbox.append(&section_kbd);
     vbox.append(&list_kbd);
@@ -299,7 +352,7 @@ fn build_vault_page() -> adw::NavigationPage {
     c.append(&help_paragraph(
         "Pithos Notebook stores all your notes in a single encrypted vault file. \
          When you first launch the app, you\u{2019}ll be asked to choose a folder \
-         and set a password."
+         and set a password.",
     ));
 
     let list = gtk::ListBox::new();
@@ -316,7 +369,7 @@ fn build_vault_page() -> adw::NavigationPage {
 
     c.append(&help_section("Saving"));
     c.append(&help_paragraph(
-        "Changes are auto-saved periodically. You can also save manually."
+        "Changes are auto-saved periodically. You can also save manually.",
     ));
     c.append(&shortcut_list(&[
         ("Ctrl+S", "Save vault"),
@@ -330,7 +383,7 @@ fn build_notes_page() -> adw::NavigationPage {
     let c = help_content();
 
     c.append(&help_paragraph(
-        "Notes are listed in the sidebar. Click any note to open it in the editor."
+        "Notes are listed in the sidebar. Click any note to open it in the editor.",
     ));
 
     c.append(&help_section("Creating & Managing"));
@@ -343,13 +396,18 @@ fn build_notes_page() -> adw::NavigationPage {
 
     c.append(&help_section("Context Menu"));
     c.append(&help_paragraph(
-        "Right-click a note in the sidebar for more options:"
+        "Right-click a note in the sidebar for more options:",
     ));
 
     let list = gtk::ListBox::new();
     list.add_css_class("boxed-list");
     list.set_selection_mode(gtk::SelectionMode::None);
-    for item in ["Rename", "Pin / Unpin to Top", "Move to Folder", "Move to Trash"] {
+    for item in [
+        "Rename",
+        "Pin / Unpin to Top",
+        "Move to Folder",
+        "Move to Trash",
+    ] {
         list.append(&adw::ActionRow::builder().title(item).build());
     }
     c.append(&list);
@@ -357,7 +415,7 @@ fn build_notes_page() -> adw::NavigationPage {
     c.append(&help_section("Templates"));
     c.append(&help_paragraph(
         "Use the sidebar menu \u{2192} \u{201c}New from Template\u{201d} to create \
-         a note from a preset template (e.g. meeting notes, journal entry)."
+         a note from a preset template (e.g. meeting notes, journal entry).",
     ));
 
     help_page("Creating Notes", &c)
@@ -369,7 +427,7 @@ fn build_formatting_page() -> adw::NavigationPage {
     c.append(&help_paragraph(
         "Use the toolbar or keyboard shortcuts to format text. \
          Write in the source editor on the left and see a live \
-         preview on the right."
+         preview on the right.",
     ));
 
     c.append(&help_section("Inline Formatting"));
@@ -395,7 +453,7 @@ fn build_formatting_page() -> adw::NavigationPage {
     c.append(&help_section("Insertions"));
     c.append(&help_paragraph(
         "Use the toolbar buttons to insert horizontal rules, images, \
-         tables, and code blocks."
+         tables, and code blocks.",
     ));
 
     c.append(&help_section("Undo & Redo"));
@@ -411,19 +469,19 @@ fn build_code_blocks_page() -> adw::NavigationPage {
     let c = help_content();
 
     c.append(&help_paragraph(
-        "Code blocks let you include source code with syntax-aware formatting."
+        "Code blocks let you include source code with syntax-aware formatting.",
     ));
 
     c.append(&help_section("Inserting a Code Block"));
     c.append(&help_paragraph(
         "Click the code block button in the toolbar and select a language. \
-         A fenced code block will be inserted at the cursor position."
+         A fenced code block will be inserted at the cursor position.",
     ));
 
     c.append(&help_section("Editing"));
     c.append(&help_paragraph(
         "Type your code between the opening and closing fence markers (```). \
-         The preview pane renders code blocks with syntax highlighting."
+         The preview pane renders code blocks with syntax highlighting.",
     ));
 
     c.append(&help_section("Supported Languages"));
@@ -431,8 +489,20 @@ fn build_code_blocks_page() -> adw::NavigationPage {
     lang_list.add_css_class("boxed-list");
     lang_list.set_selection_mode(gtk::SelectionMode::None);
     for lang in [
-        "text", "javascript", "python", "rust", "bash",
-        "html", "css", "json", "yaml", "go", "c", "cpp", "java", "sql",
+        "text",
+        "javascript",
+        "python",
+        "rust",
+        "bash",
+        "html",
+        "css",
+        "json",
+        "yaml",
+        "go",
+        "c",
+        "cpp",
+        "java",
+        "sql",
     ] {
         lang_list.append(&adw::ActionRow::builder().title(lang).build());
     }
@@ -440,7 +510,7 @@ fn build_code_blocks_page() -> adw::NavigationPage {
 
     c.append(&help_tip(
         "Tip: In Markdown source view, you can type fenced code blocks manually \
-         with any language identifier."
+         with any language identifier.",
     ));
 
     help_page("Code Blocks", &c)
@@ -451,18 +521,18 @@ fn build_tables_page() -> adw::NavigationPage {
 
     c.append(&help_paragraph(
         "Tables can be inserted from the toolbar. A default 3\u{00d7}3 table \
-         with a header row is created."
+         with a header row is created.",
     ));
 
     c.append(&help_section("Editing Tables"));
     c.append(&help_paragraph(
         "Edit cell contents directly in the rich editor. \
-         The table structure is preserved as Markdown pipe syntax."
+         The table structure is preserved as Markdown pipe syntax.",
     ));
 
     c.append(&help_tip(
         "Tip: Edit the raw pipe-delimited Markdown syntax directly in the \
-         source editor. The preview pane will render the table."
+         source editor. The preview pane will render the table.",
     ));
 
     help_page("Tables", &c)
@@ -473,7 +543,7 @@ fn build_folders_tags_page() -> adw::NavigationPage {
 
     c.append(&help_section("Folders"));
     c.append(&help_paragraph(
-        "Organize notes into folders using the sidebar."
+        "Organize notes into folders using the sidebar.",
     ));
 
     let list = gtk::ListBox::new();
@@ -491,7 +561,7 @@ fn build_folders_tags_page() -> adw::NavigationPage {
 
     c.append(&help_section("Tags"));
     c.append(&help_paragraph(
-        "Tags help you categorize and filter notes across folders."
+        "Tags help you categorize and filter notes across folders.",
     ));
 
     let tag_list = gtk::ListBox::new();
@@ -515,25 +585,24 @@ fn build_search_page() -> adw::NavigationPage {
 
     c.append(&help_section("Search"));
     c.append(&help_paragraph(
-        "Quickly find notes by title using the search bar in the sidebar."
+        "Quickly find notes by title using the search bar in the sidebar.",
     ));
-    c.append(&shortcut_list(&[
-        ("Ctrl+Shift+F", "Focus the search bar"),
-    ]));
+    c.append(&shortcut_list(&[("Ctrl+Shift+F", "Focus the search bar")]));
     c.append(&help_paragraph(
-        "Start typing to filter the notes list. The search matches note titles."
+        "Start typing to filter the notes list. The search matches note titles.",
     ));
 
     c.append(&help_section("Daily Notes"));
     c.append(&help_paragraph(
-        "Daily notes are date-stamped notes for journaling or quick capture."
+        "Daily notes are date-stamped notes for journaling or quick capture.",
     ));
-    c.append(&shortcut_list(&[
-        ("Ctrl+Shift+T", "Create or open today\u{2019}s daily note"),
-    ]));
+    c.append(&shortcut_list(&[(
+        "Ctrl+Shift+T",
+        "Create or open today\u{2019}s daily note",
+    )]));
     c.append(&help_paragraph(
         "If a daily note for today already exists, it will be opened. \
-         Otherwise a new one is created with today\u{2019}s date as the title."
+         Otherwise a new one is created with today\u{2019}s date as the title.",
     ));
 
     help_page("Search &amp; Daily Notes", &c)
@@ -545,19 +614,19 @@ fn build_snapshots_page() -> adw::NavigationPage {
     c.append(&help_section("Snapshots"));
     c.append(&help_paragraph(
         "Snapshots let you save a named version of your note at any point in time. \
-         Use the primary menu (hamburger) \u{2192} \u{201c}Save Snapshot\u{201d} to create one."
+         Use the primary menu (hamburger) \u{2192} \u{201c}Save Snapshot\u{201d} to create one.",
     ));
 
     c.append(&help_section("Version History"));
     c.append(&help_paragraph(
         "View all saved snapshots for the current note via the primary menu \
          \u{2192} \u{201c}Version History\u{201d}. You can restore any previous \
-         snapshot to replace the current content."
+         snapshot to replace the current content.",
     ));
 
     c.append(&help_tip(
         "Tip: Snapshots are stored inside the encrypted vault, so they\u{2019}re \
-         just as secure as your notes."
+         just as secure as your notes.",
     ));
 
     help_page("Snapshots &amp; History", &c)
@@ -568,28 +637,35 @@ fn build_import_export_page() -> adw::NavigationPage {
 
     c.append(&help_section("Import"));
     c.append(&help_paragraph(
-        "Import a Markdown file as a new note in your vault."
+        "Import a Markdown file as a new note in your vault.",
     ));
-    c.append(&shortcut_list(&[
-        ("Ctrl+O", "Import a .md file"),
-    ]));
+    c.append(&shortcut_list(&[("Ctrl+O", "Import a .md file")]));
 
     c.append(&help_section("Export"));
     c.append(&help_paragraph(
-        "Export the current note to a file on disk. Available from the primary menu."
+        "Export the current note via the primary menu or Ctrl+Shift+E. \
+         Choose a format from the file dialog filter. Requires pandoc for PDF, \
+         Word, HTML, LaTeX, and EPUB.",
     ));
 
     let list = gtk::ListBox::new();
     list.add_css_class("boxed-list");
     list.set_selection_mode(gtk::SelectionMode::None);
-    list.append(&adw::ActionRow::builder()
-        .title("Export as Markdown")
-        .subtitle("Saves the note as a .md file")
-        .build());
-    list.append(&adw::ActionRow::builder()
-        .title("Export as HTML")
-        .subtitle("Converts the note to HTML and saves it")
-        .build());
+    for (title, subtitle) in [
+        ("Markdown (.md)", "Plain Markdown file"),
+        ("HTML (.html)", "Standalone HTML document"),
+        ("PDF (.pdf)", "Requires pandoc + LaTeX"),
+        ("Word (.docx)", "Requires pandoc"),
+        ("LaTeX (.tex)", "Requires pandoc"),
+        ("EPUB (.epub)", "Requires pandoc"),
+    ] {
+        list.append(
+            &adw::ActionRow::builder()
+                .title(title)
+                .subtitle(subtitle)
+                .build(),
+        );
+    }
     c.append(&list);
 
     help_page("Import &amp; Export", &c)
@@ -599,17 +675,17 @@ fn build_backlinks_page() -> adw::NavigationPage {
     let c = help_content();
 
     c.append(&help_paragraph(
-        "Backlinks show which other notes in your vault link to the current note."
+        "Backlinks show which other notes in your vault link to the current note.",
     ));
 
     c.append(&help_section("Viewing Backlinks"));
     c.append(&help_paragraph(
         "Open the primary menu (hamburger) \u{2192} \u{201c}View Backlinks\u{201d} \
-         to see a list of notes that reference the current note."
+         to see a list of notes that reference the current note.",
     ));
 
     c.append(&help_tip(
-        "Tip: To create a link to another note, use Ctrl+K and type the note\u{2019}s name."
+        "Tip: To create a link to another note, use Ctrl+K and type the note\u{2019}s name.",
     ));
 
     help_page("Backlinks", &c)
@@ -619,36 +695,39 @@ fn build_shortcuts_page() -> adw::NavigationPage {
     let c = help_content();
 
     let shortcuts = [
-        ("General", &[
-            ("Ctrl+N", "New note"),
-            ("Ctrl+S", "Save"),
-            ("Ctrl+W", "Close tab"),
-            ("Ctrl+\\", "Toggle sidebar"),
-            ("Ctrl+Shift+F", "Search notes"),
-            ("Ctrl+Shift+P", "Command palette"),
-            ("Ctrl+Shift+J", "Zen mode"),
-            ("Ctrl+Shift+T", "Daily note"),
-            ("Ctrl+Shift+D", "Toggle theme"),
-            ("F1", "Help"),
-            ("F2", "Rename note"),
-            ("F11", "Fullscreen"),
-        ] as &[(&str, &str)]),
-        ("Formatting", &[
-            ("Ctrl+B", "Bold"),
-            ("Ctrl+I", "Italic"),
-            ("Ctrl+U", "Underline"),
-            ("Ctrl+D", "Strikethrough"),
-            ("Ctrl+E", "Inline code"),
-            ("Ctrl+K", "Insert link"),
-            ("Ctrl+1\u{2026}6", "Heading 1\u{2026}6"),
-            ("Ctrl+Shift+Q", "Block quote"),
-            ("Ctrl+Shift+L", "Bullet list"),
-            ("Ctrl+Space", "Toggle checkbox"),
-        ]),
-        ("Editing", &[
-            ("Ctrl+Z", "Undo"),
-            ("Ctrl+Shift+Z", "Redo"),
-        ]),
+        (
+            "General",
+            &[
+                ("Ctrl+N", "New note"),
+                ("Ctrl+S", "Save"),
+                ("Ctrl+W", "Close tab"),
+                ("Ctrl+\\", "Toggle sidebar"),
+                ("Ctrl+Shift+F", "Search notes"),
+                ("Ctrl+Shift+P", "Command palette"),
+                ("Ctrl+Shift+J", "Zen mode"),
+                ("Ctrl+Shift+T", "Daily note"),
+                ("Ctrl+Shift+D", "Toggle theme"),
+                ("F1", "Help"),
+                ("F2", "Rename note"),
+                ("F11", "Fullscreen"),
+            ] as &[(&str, &str)],
+        ),
+        (
+            "Formatting",
+            &[
+                ("Ctrl+B", "Bold"),
+                ("Ctrl+I", "Italic"),
+                ("Ctrl+U", "Underline"),
+                ("Ctrl+D", "Strikethrough"),
+                ("Ctrl+E", "Inline code"),
+                ("Ctrl+K", "Insert link"),
+                ("Ctrl+1\u{2026}6", "Heading 1\u{2026}6"),
+                ("Ctrl+Shift+Q", "Block quote"),
+                ("Ctrl+Shift+L", "Bullet list"),
+                ("Ctrl+Space", "Toggle checkbox"),
+            ],
+        ),
+        ("Editing", &[("Ctrl+Z", "Undo"), ("Ctrl+Shift+Z", "Redo")]),
     ];
 
     for (group_title, entries) in shortcuts {

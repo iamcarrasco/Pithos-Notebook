@@ -2,13 +2,29 @@ use gtk::glib;
 use sourceview5 as sourceview;
 use std::{cell::Cell, cell::RefCell, rc::Rc};
 
-use pithos_core::state::DocState;
 use pithos_core::crypto;
+use pithos_core::state::DocState;
 
 pub const CODE_LANGUAGES: &[&str] = &[
-    "text", "yaml", "json", "bash", "python", "rust", "go",
-    "javascript", "typescript", "sql", "hcl", "powershell", "kql",
-    "dockerfile", "html", "css", "c", "cpp", "java",
+    "text",
+    "yaml",
+    "json",
+    "bash",
+    "python",
+    "rust",
+    "go",
+    "javascript",
+    "typescript",
+    "sql",
+    "hcl",
+    "powershell",
+    "kql",
+    "dockerfile",
+    "html",
+    "css",
+    "c",
+    "cpp",
+    "java",
     "mermaid",
 ];
 
@@ -32,9 +48,11 @@ pub struct EditorCtx {
     pub vault_folder: Rc<RefCell<String>>,
     pub cached_key: Rc<RefCell<Option<crypto::CachedKey>>>,
     pub save_timeout_id: Rc<Cell<Option<glib::SourceId>>>,
+    pub auto_save_timeout_id: Rc<Cell<Option<glib::SourceId>>>,
     pub save_generation: Rc<Cell<u64>>,
     pub saving: Rc<Cell<bool>>,
     pub close_requested: Rc<Cell<bool>>,
+    pub vault_file_monitor: Rc<RefCell<Option<gtk::gio::FileMonitor>>>,
     // HIG layout widgets
     pub split_view: adw::OverlaySplitView,
     pub toast_overlay: adw::ToastOverlay,
@@ -63,6 +81,8 @@ pub struct EditorCtx {
     pub vault_name_label: gtk::Label,
     // Timestamp of last completed vault save (used by file monitor to suppress own-write toasts)
     pub last_save_completed: Rc<Cell<std::time::Instant>>,
+    // Split pane position saved before entering zen mode, restored on exit
+    pub pre_zen_split_pos: Rc<Cell<i32>>,
 }
 
 pub struct ContentPaneWidgets {

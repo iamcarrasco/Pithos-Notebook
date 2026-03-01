@@ -1,4 +1,4 @@
-use pulldown_cmark::{Parser, Options, html};
+use pulldown_cmark::{html, Options, Parser};
 
 /// Convert markdown to HTML body (no wrapper/styles).
 pub fn markdown_to_html(markdown: &str) -> String {

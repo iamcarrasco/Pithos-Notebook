@@ -63,12 +63,20 @@ impl CachedKey {
         let mut salt = [0u8; SALT_LEN];
         rand::thread_rng().fill_bytes(&mut salt);
         let key = derive_key(passphrase, &salt);
-        CachedKey { key, salt, passphrase: passphrase.to_string() }
+        CachedKey {
+            key,
+            salt,
+            passphrase: passphrase.to_string(),
+        }
     }
 
     /// Construct from already-derived key material (zero cost).
     pub fn from_raw(key: [u8; KEY_LEN], salt: [u8; SALT_LEN], passphrase: &str) -> Self {
-        CachedKey { key, salt, passphrase: passphrase.to_string() }
+        CachedKey {
+            key,
+            salt,
+            passphrase: passphrase.to_string(),
+        }
     }
 }
 
@@ -106,8 +114,8 @@ pub fn decrypt_vault_returning_key(
     encrypted_json: &str,
     passphrase: &str,
 ) -> Result<(String, CachedKey), CryptoError> {
-    let envelope: serde_json::Value =
-        serde_json::from_str(encrypted_json).map_err(|e| CryptoError::InvalidData(e.to_string()))?;
+    let envelope: serde_json::Value = serde_json::from_str(encrypted_json)
+        .map_err(|e| CryptoError::InvalidData(e.to_string()))?;
 
     let is_encrypted = envelope
         .get("encrypted")
@@ -143,8 +151,8 @@ pub fn decrypt_vault_returning_key(
     let ciphertext = &combined[SALT_LEN + IV_LEN..];
 
     let key = derive_key(passphrase, salt);
-    let cipher =
-        Aes256Gcm::new_from_slice(&key).map_err(|e| CryptoError::DecryptionFailed(e.to_string()))?;
+    let cipher = Aes256Gcm::new_from_slice(&key)
+        .map_err(|e| CryptoError::DecryptionFailed(e.to_string()))?;
     let nonce = Nonce::from_slice(iv);
     let plaintext = cipher
         .decrypt(nonce, ciphertext)
@@ -153,7 +161,12 @@ pub fn decrypt_vault_returning_key(
     let plaintext_str =
         String::from_utf8(plaintext).map_err(|e| CryptoError::DecryptionFailed(e.to_string()))?;
 
-    let cached = CachedKey::derive(passphrase);
+    // Reuse the key+salt that were just successfully used for decryption,
+    // instead of calling CachedKey::derive() again (which would run another
+    // expensive 600k-iteration PBKDF2 derivation with a new random salt).
+    let mut salt_arr = [0u8; SALT_LEN];
+    salt_arr.copy_from_slice(salt);
+    let cached = CachedKey::from_raw(key, salt_arr, passphrase);
 
     Ok((plaintext_str, cached))
 }
@@ -207,7 +220,9 @@ pub fn decrypt_asset(data: &[u8], cached: &CachedKey) -> Result<Vec<u8>, CryptoE
         .map_err(|e| CryptoError::InvalidData(e.to_string()))?;
 
     if combined.len() < SALT_LEN + IV_LEN + 1 {
-        return Err(CryptoError::InvalidData("Encrypted asset data too short".into()));
+        return Err(CryptoError::InvalidData(
+            "Encrypted asset data too short".into(),
+        ));
     }
 
     let asset_salt = &combined[..SALT_LEN];
@@ -255,7 +270,8 @@ mod tests {
             decrypt_vault_returning_key(&encrypted, pass).expect("decrypt");
         assert_eq!(decrypted, plaintext);
         let re_encrypted = encrypt_vault_fast(plaintext, &reused_key).expect("re-encrypt");
-        let (re_decrypted, _) = decrypt_vault_returning_key(&re_encrypted, pass).expect("re-decrypt");
+        let (re_decrypted, _) =
+            decrypt_vault_returning_key(&re_encrypted, pass).expect("re-decrypt");
         assert_eq!(re_decrypted, plaintext);
     }
 }

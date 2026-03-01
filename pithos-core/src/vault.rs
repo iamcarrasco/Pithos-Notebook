@@ -123,8 +123,7 @@ pub fn load_config() -> AppConfig {
 pub fn save_config(config: &AppConfig) -> io::Result<()> {
     let dir = config_dir();
     fs::create_dir_all(&dir)?;
-    let json = serde_json::to_string_pretty(config)
-        .map_err(io::Error::other)?;
+    let json = serde_json::to_string_pretty(config).map_err(io::Error::other)?;
     atomic_write(&config_path(), json.as_bytes())
 }
 
@@ -184,12 +183,16 @@ pub fn is_valid_asset_id(id: &str) -> bool {
     if id.contains('/') || id.contains('\\') || id == "." || id == ".." || id.starts_with('.') {
         return false;
     }
-    id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == '.')
+    id.chars()
+        .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == '.')
 }
 
 pub fn write_asset(vault_folder: &str, asset_id: &str, data: &[u8]) -> io::Result<()> {
     if !is_valid_asset_id(asset_id) {
-        return Err(io::Error::new(io::ErrorKind::InvalidInput, "Invalid asset ID"));
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "Invalid asset ID",
+        ));
     }
     let dir = assets_dir(vault_folder);
     fs::create_dir_all(&dir)?;
@@ -257,7 +260,11 @@ pub fn doc_state_to_vault(state: &DocState) -> VaultData {
             updated_at: t.updated_at,
             deleted: Some(true),
             deleted_at: Some(t.deleted_at),
-            tags: if t.tags.is_empty() { None } else { Some(t.tags.clone()) },
+            tags: if t.tags.is_empty() {
+                None
+            } else {
+                Some(t.tags.clone())
+            },
             pinned: if t.pinned { Some(true) } else { None },
         })
         .collect();
@@ -265,16 +272,26 @@ pub fn doc_state_to_vault(state: &DocState) -> VaultData {
     let mut note_versions: HashMap<String, Vec<VersionEntry>> = HashMap::new();
     for note in &state.notes {
         if !note.versions.is_empty() {
-            let entries = note.versions.iter()
-                .map(|v| VersionEntry { ts: v.ts, content: v.content.clone() })
+            let entries = note
+                .versions
+                .iter()
+                .map(|v| VersionEntry {
+                    ts: v.ts,
+                    content: v.content.clone(),
+                })
                 .collect();
             note_versions.insert(note.id.clone(), entries);
         }
     }
     for trash_item in &state.trash {
         if !trash_item.versions.is_empty() {
-            let entries = trash_item.versions.iter()
-                .map(|v| VersionEntry { ts: v.ts, content: v.content.clone() })
+            let entries = trash_item
+                .versions
+                .iter()
+                .map(|v| VersionEntry {
+                    ts: v.ts,
+                    content: v.content.clone(),
+                })
                 .collect();
             note_versions.insert(trash_item.id.clone(), entries);
         }
@@ -321,7 +338,11 @@ fn note_to_tree_item(note: &NoteItem) -> TreeItem {
         updated_at: note.updated_at,
         deleted: None,
         deleted_at: None,
-        tags: if note.tags.is_empty() { None } else { Some(note.tags.clone()) },
+        tags: if note.tags.is_empty() {
+            None
+        } else {
+            Some(note.tags.clone())
+        },
         pinned: if note.pinned { Some(true) } else { None },
     }
 }
@@ -381,8 +402,18 @@ pub fn vault_to_doc_state(vault: VaultData) -> DocState {
         .trash
         .iter()
         .map(|item| {
-            let versions = vault.note_versions.get(&item.id)
-                .map(|entries| entries.iter().map(|e| NoteVersion { ts: e.ts, content: e.content.clone() }).collect())
+            let versions = vault
+                .note_versions
+                .get(&item.id)
+                .map(|entries| {
+                    entries
+                        .iter()
+                        .map(|e| NoteVersion {
+                            ts: e.ts,
+                            content: e.content.clone(),
+                        })
+                        .collect()
+                })
                 .unwrap_or_default();
             TrashItem {
                 id: item.id.clone(),
@@ -401,8 +432,7 @@ pub fn vault_to_doc_state(vault: VaultData) -> DocState {
 
     let sort_order = parse_sort_order(&vault.sort_by, &vault.sort_direction);
 
-    let active_id = if !vault.active_id.is_empty()
-        && notes.iter().any(|n| n.id == vault.active_id)
+    let active_id = if !vault.active_id.is_empty() && notes.iter().any(|n| n.id == vault.active_id)
     {
         vault.active_id.clone()
     } else {
@@ -450,7 +480,9 @@ pub fn vault_to_doc_state(vault: VaultData) -> DocState {
         vault.theme
     };
 
-    let max_existing = notes.iter().map(|n| &n.id)
+    let max_existing = notes
+        .iter()
+        .map(|n| &n.id)
         .chain(trash.iter().map(|t| &t.id))
         .filter_map(|id| id.strip_prefix("note-").and_then(|s| s.parse::<u64>().ok()))
         .max()
@@ -479,11 +511,19 @@ pub fn vault_to_doc_state(vault: VaultData) -> DocState {
         viewing_trash: false,
         zen_mode: false,
         sidebar_visible: true,
-        custom_templates: vault.custom_templates.into_iter().map(|t| (t.name, t.content, t.tags)).collect(),
+        custom_templates: vault
+            .custom_templates
+            .into_iter()
+            .map(|t| (t.name, t.content, t.tags))
+            .collect(),
         disabled_templates: vault.disabled_templates,
         filter_tags: Vec::new(),
         tag_filter_and: false,
-        sidebar_width: if vault.sidebar_width > 0 { vault.sidebar_width } else { 300 },
+        sidebar_width: if vault.sidebar_width > 0 {
+            vault.sidebar_width
+        } else {
+            300
+        },
         spellcheck_enabled: false,
 
         last_undo_push: std::time::Instant::now(),
@@ -510,14 +550,24 @@ fn flatten_tree(
                 parent_id: parent_id.clone(),
             });
             if let Some(children) = &item.children {
-                flatten_tree(children, Some(item.id.clone()), notes, folders, versions_map);
+                flatten_tree(
+                    children,
+                    Some(item.id.clone()),
+                    notes,
+                    folders,
+                    versions_map,
+                );
             }
         } else {
             let versions = versions_map
                 .get(&item.id)
                 .map(|entries| {
-                    entries.iter()
-                        .map(|e| NoteVersion { ts: e.ts, content: e.content.clone() })
+                    entries
+                        .iter()
+                        .map(|e| NoteVersion {
+                            ts: e.ts,
+                            content: e.content.clone(),
+                        })
                         .collect()
                 })
                 .unwrap_or_default();

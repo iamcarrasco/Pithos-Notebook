@@ -32,6 +32,13 @@ fn main() {
     install_css();
 
     let app = adw::Application::builder().application_id(APP_ID).build();
-    app.connect_activate(build_ui);
+    app.connect_activate(|app| {
+        // If a window already exists, just present it (single-instance).
+        if let Some(window) = app.active_window() {
+            window.present();
+            return;
+        }
+        build_ui(app);
+    });
     app.run();
 }

@@ -1,6 +1,6 @@
+use crate::*;
 use adw::prelude::*;
 use pithos_core::state::*;
-use crate::*;
 
 // ---------------------------------------------------------------------------
 // Note management
@@ -43,15 +43,6 @@ pub fn create_note_in_folder(
     trigger_vault_save(ctx);
 }
 
-pub fn new_document(ctx: &EditorCtx) {
-    create_note(
-        ctx,
-        "Untitled Note".to_string(),
-        "# Untitled Note\n\n".to_string(),
-        Vec::new(),
-    );
-}
-
 pub fn close_tab(ctx: &EditorCtx, note_id: &str) {
     if ctx.state.borrow().open_tabs.len() <= 1 {
         return;
@@ -71,6 +62,12 @@ pub fn close_tab(ctx: &EditorCtx, note_id: &str) {
 }
 
 pub fn switch_to_note(ctx: &EditorCtx, note_id: &str) {
+    // Cancel any pending debounced sync from the previous note to prevent it
+    // from firing after the switch and mixing content between notes.
+    if let Some(id) = ctx.sync_timeout_id.take() {
+        id.remove();
+    }
+
     let current_id = ctx.state.borrow().active_note_id.clone();
     if current_id == note_id {
         {
@@ -92,7 +89,7 @@ pub fn switch_to_note(ctx: &EditorCtx, note_id: &str) {
         if let Some(index) = find_note_index(&state.notes, &state.active_note_id) {
             if state.notes[index].content != outgoing_markdown {
                 let previous_content = state.notes[index].content.clone();
-                push_snapshot(&mut state.notes[index], previous_content);
+                pithos_core::notes::push_snapshot(&mut state.notes[index], previous_content);
                 state.notes[index].content = outgoing_markdown.clone();
                 state.notes[index].updated_at = unix_now();
             }
@@ -156,11 +153,7 @@ pub fn refresh_tabs(ctx: &EditorCtx) {
             .iter()
             .map(|n| (n.id.clone(), n.name.clone()))
             .collect();
-        (
-            state.open_tabs.clone(),
-            state.active_note_id.clone(),
-            names,
-        )
+        (state.open_tabs.clone(), state.active_note_id.clone(), names)
     };
 
     let lookup_name = |id: &str| -> String {
@@ -289,16 +282,12 @@ pub fn remove_tag_from_active_note(ctx: &EditorCtx, tag: &str) {
 // Snapshots
 // ---------------------------------------------------------------------------
 
-pub fn push_snapshot(note: &mut NoteItem, content: String) {
-    pithos_core::notes::push_snapshot(note, content);
-}
-
 pub fn save_manual_snapshot(ctx: &EditorCtx) {
     let markdown = current_markdown(ctx);
     {
         let mut state = ctx.state.borrow_mut();
         if let Some(index) = find_note_index(&state.notes, &state.active_note_id) {
-            push_snapshot(&mut state.notes[index], markdown.clone());
+            pithos_core::notes::push_snapshot(&mut state.notes[index], markdown.clone());
             state.notes[index].content = markdown;
             state.notes[index].updated_at = unix_now();
         }
@@ -379,7 +368,7 @@ pub fn delete_note(ctx: &EditorCtx) {
     let ctx = ctx.clone();
     dialog.connect_response(None, move |_, response| {
         if response == "trash" {
-            move_to_trash(&ctx, &note_id);
+            do_move_to_trash(&ctx, &note_id);
         }
     });
     dialog.present(Some(&window));
@@ -390,7 +379,11 @@ pub fn move_to_trash(ctx: &EditorCtx, note_id: &str) {
         let state = ctx.state.borrow();
         if state.notes.len() <= 1 {
             drop(state);
-            show_info(&ctx.window, "Cannot Delete", "You must keep at least one note");
+            show_info(
+                &ctx.window,
+                "Cannot Delete",
+                "You must keep at least one note",
+            );
             return;
         }
     }
@@ -454,7 +447,11 @@ pub fn restore_from_trash(ctx: &EditorCtx, trash_id: &str) {
         };
         let item = state.trash.remove(idx);
         // Check if original parent folder still exists
-        let parent_id = if item.parent_id.as_ref().is_some_and(|pid| state.folders.iter().any(|f| &f.id == pid)) {
+        let parent_id = if item
+            .parent_id
+            .as_ref()
+            .is_some_and(|pid| state.folders.iter().any(|f| &f.id == pid))
+        {
             item.parent_id
         } else {
             None
@@ -480,10 +477,7 @@ pub fn restore_from_trash(ctx: &EditorCtx, trash_id: &str) {
 }
 
 pub fn delete_permanently(ctx: &EditorCtx, trash_id: &str) {
-    ctx.state
-        .borrow_mut()
-        .trash
-        .retain(|t| t.id != trash_id);
+    ctx.state.borrow_mut().trash.retain(|t| t.id != trash_id);
     refresh_trash_view(ctx);
     trigger_vault_save(ctx);
 }
@@ -598,10 +592,7 @@ pub fn refresh_trash_view(ctx: &EditorCtx) {
 // ---------------------------------------------------------------------------
 
 pub fn create_folder(ctx: &EditorCtx, parent_id: Option<String>) {
-    let dialog = adw::AlertDialog::new(
-        Some("New Folder"),
-        Some("Enter a name for the folder"),
-    );
+    let dialog = adw::AlertDialog::new(Some("New Folder"), Some("Enter a name for the folder"));
 
     let entry = gtk::Entry::new();
     entry.set_text("New Folder");
@@ -619,28 +610,27 @@ pub fn create_folder(ctx: &EditorCtx, parent_id: Option<String>) {
     dialog.connect_response(None, move |dlg, response| {
         let name = entry.text().trim().to_string();
         dlg.set_extra_child(gtk::Widget::NONE);
-        if response == "create"
-            && !name.is_empty() {
-                let mut state = ctx.state.borrow_mut();
-                if folder_name_exists(&state.folders, &name, &parent_id, None) {
-                    drop(state);
-                    send_toast(&ctx, "A folder with that name already exists here");
-                    return;
-                }
-                let id = format!("folder-{}", state.next_note_seq);
-                state.next_note_seq += 1;
-                state.folders.push(FolderItem {
-                    id,
-                    name,
-                    expanded: true,
-                    created_at: unix_now(),
-                    updated_at: unix_now(),
-                    parent_id: parent_id.clone(),
-                });
+        if response == "create" && !name.is_empty() {
+            let mut state = ctx.state.borrow_mut();
+            if folder_name_exists(&state.folders, &name, &parent_id, None) {
                 drop(state);
-                refresh_note_list(&ctx);
-                trigger_vault_save(&ctx);
+                send_toast(&ctx, "A folder with that name already exists here");
+                return;
             }
+            let id = format!("folder-{}", state.next_note_seq);
+            state.next_note_seq += 1;
+            state.folders.push(FolderItem {
+                id,
+                name,
+                expanded: true,
+                created_at: unix_now(),
+                updated_at: unix_now(),
+                parent_id: parent_id.clone(),
+            });
+            drop(state);
+            refresh_note_list(&ctx);
+            trigger_vault_save(&ctx);
+        }
     });
     dialog.present(Some(&window));
 }
@@ -667,10 +657,7 @@ pub fn move_note_to_folder(ctx: &EditorCtx) {
         return;
     }
 
-    let dialog = adw::AlertDialog::new(
-        Some("Move to Folder"),
-        Some("Select a destination folder"),
-    );
+    let dialog = adw::AlertDialog::new(Some("Move to Folder"), Some("Select a destination folder"));
 
     // Build a ListBox with folder choices
     let list = gtk::ListBox::new();
@@ -678,18 +665,14 @@ pub fn move_note_to_folder(ctx: &EditorCtx) {
     list.add_css_class("boxed-list");
 
     // Root option
-    let root_row = adw::ActionRow::builder()
-        .title("Root (top level)")
-        .build();
+    let root_row = adw::ActionRow::builder().title("Root (top level)").build();
     if current_parent.is_none() {
         root_row.set_subtitle("current");
     }
     list.append(&root_row);
 
     for (id, name) in &folders {
-        let row = adw::ActionRow::builder()
-            .title(name)
-            .build();
+        let row = adw::ActionRow::builder().title(name).build();
         if Some(id) == current_parent.as_ref() {
             row.set_subtitle("current");
         }
@@ -715,7 +698,9 @@ pub fn move_note_to_folder(ctx: &EditorCtx) {
             let target = if selected_idx == 0 {
                 None
             } else {
-                folders.get((selected_idx - 1) as usize).map(|(id, _)| id.clone())
+                folders
+                    .get((selected_idx - 1) as usize)
+                    .map(|(id, _)| id.clone())
             };
             {
                 let mut state = ctx.state.borrow_mut();
@@ -776,7 +761,12 @@ pub fn show_template_picker(ctx: &EditorCtx) {
         let ctx = ctx.clone();
         let dialog = dialog.clone();
         blank_btn.connect_clicked(move |_| {
-            create_note(&ctx, "Untitled Note".into(), "# Untitled Note\n\n".into(), Vec::new());
+            create_note(
+                &ctx,
+                "Untitled Note".into(),
+                "# Untitled Note\n\n".into(),
+                Vec::new(),
+            );
             dialog.close();
         });
     }
@@ -804,7 +794,11 @@ pub fn show_template_picker(ctx: &EditorCtx) {
         let ctx = ctx.clone();
         let dialog = dialog.clone();
         btn.connect_clicked(move |_| {
-            let tags: Vec<String> = tags_csv.split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect();
+            let tags: Vec<String> = tags_csv
+                .split(',')
+                .map(|s| s.trim().to_string())
+                .filter(|s| !s.is_empty())
+                .collect();
             create_note(&ctx, name.clone(), body.clone(), tags);
             dialog.close();
         });
@@ -839,7 +833,11 @@ pub fn show_template_picker(ctx: &EditorCtx) {
                 let body = body.clone();
                 let tags_csv = tags_csv.clone();
                 btn.connect_clicked(move |_| {
-                    let tags: Vec<String> = tags_csv.split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect();
+                    let tags: Vec<String> = tags_csv
+                        .split(',')
+                        .map(|s| s.trim().to_string())
+                        .filter(|s| !s.is_empty())
+                        .collect();
                     create_note(&ctx, name.clone(), body.clone(), tags);
                     dialog.close();
                 });
@@ -937,10 +935,3 @@ pub fn save_note_as_template(ctx: &EditorCtx) {
     dialog.present(Some(&window));
 }
 
-// ---------------------------------------------------------------------------
-// Trash auto-purge
-// ---------------------------------------------------------------------------
-
-pub fn purge_old_trash(state: &mut DocState) -> usize {
-    pithos_core::notes::purge_old_trash(state)
-}

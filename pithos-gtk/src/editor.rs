@@ -1,8 +1,8 @@
+use crate::*;
 use adw::prelude::*;
+use pithos_core::state::*;
 use sourceview5 as sourceview;
 use std::{fs, path::PathBuf};
-use pithos_core::state::*;
-use crate::*;
 
 // ---------------------------------------------------------------------------
 // Signal wiring
@@ -112,7 +112,10 @@ pub fn wire_editor_signals(ctx: &EditorCtx, tag_entry: &gtk::Entry) {
                         .and_then(|e| e.to_str())
                         .unwrap_or("")
                         .to_lowercase();
-                    if matches!(ext.as_str(), "png" | "jpg" | "jpeg" | "gif" | "webp" | "svg") {
+                    if matches!(
+                        ext.as_str(),
+                        "png" | "jpg" | "jpeg" | "gif" | "webp" | "svg"
+                    ) {
                         if let Ok(bytes) = fs::read(&path) {
                             let filename = path
                                 .file_name()
@@ -144,50 +147,48 @@ pub fn wire_editor_signals(ctx: &EditorCtx, tag_entry: &gtk::Entry) {
     }
 }
 
-pub fn wire_keyboard_shortcuts(
-    ctx: &EditorCtx,
-    window: &adw::ApplicationWindow,
-) {
+pub fn wire_keyboard_shortcuts(ctx: &EditorCtx, window: &adw::ApplicationWindow) {
     // Use set_accels_for_action — the standard GNOME pattern.
     let app = window
         .application()
         .expect("window must have an application");
 
     let shortcuts: &[(&[&str], &str)] = &[
-        (&["<Ctrl>n"],          "win.new-note"),
-        (&["<Ctrl>s"],          "win.save-vault"),
-        (&["<Ctrl><Shift>s"],   "win.save-as"),
-        (&["<Ctrl>o"],          "win.import-file"),
-        (&["<Ctrl>w"],          "win.close-tab"),
-        (&["<Ctrl>z"],          "win.undo"),
+        (&["<Ctrl>n"], "win.new-note"),
+        (&["<Ctrl>s"], "win.save-vault"),
+        (&["<Ctrl><Shift>s"], "win.save-as"),
+        (&["<Ctrl>o"], "win.import-file"),
+        (&["<Ctrl>w"], "win.close-tab"),
+        (&["<Ctrl>z"], "win.undo"),
         (&["<Ctrl><Shift>z", "<Ctrl>y"], "win.redo"),
-        (&["<Ctrl>backslash"],  "win.toggle-sidebar"),
-        (&["<Ctrl><Shift>j"],   "win.zen-mode"),
-        (&["<Ctrl><Shift>t"],   "win.daily-note"),
-        (&["<Ctrl><Shift>f"],   "win.focus-search"),
-        (&["<Ctrl><Shift>d"],   "win.toggle-theme"),
-        (&["F2"],               "win.rename-note"),
-        (&["F11"],              "win.fullscreen"),
+        (&["<Ctrl>backslash"], "win.toggle-sidebar"),
+        (&["<Ctrl><Shift>j"], "win.zen-mode"),
+        (&["<Ctrl><Shift>t"], "win.daily-note"),
+        (&["<Ctrl><Shift>f"], "win.focus-search"),
+        (&["<Ctrl><Shift>d"], "win.toggle-theme"),
+        (&["<Ctrl><Shift>e"], "win.export"),
+        (&["F2"], "win.rename-note"),
+        (&["F11"], "win.fullscreen"),
         // Formatting shortcuts
-        (&["<Ctrl>b"],          "win.fmt-bold"),
-        (&["<Ctrl>i"],          "win.fmt-italic"),
-        (&["<Ctrl>u"],          "win.fmt-underline"),
-        (&["<Ctrl>d"],          "win.fmt-strike"),
-        (&["<Ctrl>e"],          "win.fmt-code"),
-        (&["<Ctrl>k"],          "win.fmt-link"),
-        (&["<Ctrl>1"],          "win.fmt-h1"),
-        (&["<Ctrl>2"],          "win.fmt-h2"),
-        (&["<Ctrl>3"],          "win.fmt-h3"),
-        (&["<Ctrl>4"],          "win.fmt-h4"),
-        (&["<Ctrl>5"],          "win.fmt-h5"),
-        (&["<Ctrl>6"],          "win.fmt-h6"),
-        (&["<Ctrl><Shift>q"],   "win.fmt-quote"),
-        (&["<Ctrl><Shift>l"],   "win.fmt-bullet-list"),
-        (&["<Ctrl>space"],      "win.toggle-checkbox"),
-        (&["<Ctrl><Shift>p"],   "win.command-palette"),
-        (&["F1"],               "win.show-help"),
-        (&["<Ctrl>f"],          "win.find-in-editor"),
-        (&["<Ctrl>h"],          "win.find-replace"),
+        (&["<Ctrl>b"], "win.fmt-bold"),
+        (&["<Ctrl>i"], "win.fmt-italic"),
+        (&["<Ctrl>u"], "win.fmt-underline"),
+        (&["<Ctrl>d"], "win.fmt-strike"),
+        (&["<Ctrl>e"], "win.fmt-code"),
+        (&["<Ctrl>k"], "win.fmt-link"),
+        (&["<Ctrl>1"], "win.fmt-h1"),
+        (&["<Ctrl>2"], "win.fmt-h2"),
+        (&["<Ctrl>3"], "win.fmt-h3"),
+        (&["<Ctrl>4"], "win.fmt-h4"),
+        (&["<Ctrl>5"], "win.fmt-h5"),
+        (&["<Ctrl>6"], "win.fmt-h6"),
+        (&["<Ctrl><Shift>q"], "win.fmt-quote"),
+        (&["<Ctrl><Shift>l"], "win.fmt-bullet-list"),
+        (&["<Ctrl>space"], "win.toggle-checkbox"),
+        (&["<Ctrl><Shift>p"], "win.command-palette"),
+        (&["F1"], "win.show-help"),
+        (&["<Ctrl>f"], "win.find-in-editor"),
+        (&["<Ctrl>h"], "win.find-replace"),
     ];
 
     for &(accels, action_name) in shortcuts {
@@ -199,9 +200,8 @@ pub fn wire_keyboard_shortcuts(
         let source_view = ctx.source_view.clone();
         let ctx = ctx.clone();
         let key_ctl = gtk::EventControllerKey::new();
-        key_ctl.connect_key_pressed(move |_, key, _, mods| {
-            handle_source_view_keys(&ctx, key, mods)
-        });
+        key_ctl
+            .connect_key_pressed(move |_, key, _, mods| handle_source_view_keys(&ctx, key, mods));
         source_view.add_controller(key_ctl);
     }
 }
@@ -227,15 +227,12 @@ pub fn process_buffer_change_debounced(ctx: &EditorCtx) {
     }
     let timeout_cell = ctx.sync_timeout_id.clone();
     let ctx_inner = ctx.clone();
-    let id = glib::timeout_add_local_once(
-        std::time::Duration::from_millis(300),
-        move || {
-            timeout_cell.set(None);
-            if !ctx_inner.state.borrow().suppress_sync {
-                do_sync_and_undo(&ctx_inner);
-            }
-        },
-    );
+    let id = glib::timeout_add_local_once(std::time::Duration::from_millis(300), move || {
+        timeout_cell.set(None);
+        if !ctx_inner.state.borrow().suppress_sync {
+            do_sync_and_undo(&ctx_inner);
+        }
+    });
     ctx.sync_timeout_id.set(Some(id));
 }
 
@@ -368,9 +365,7 @@ pub fn undo(ctx: &EditorCtx) {
         };
 
         let current = state.last_snapshot.clone();
-        if !current.is_empty() {
-            state.redo_stack.push(current);
-        }
+        state.redo_stack.push(current);
 
         previous
     };
@@ -386,9 +381,7 @@ pub fn redo(ctx: &EditorCtx) {
         };
 
         let current = state.last_snapshot.clone();
-        if !current.is_empty() {
-            state.undo_stack.push(current);
-        }
+        state.undo_stack.push(current);
 
         next
     };
@@ -453,7 +446,10 @@ fn handle_list_continuation(ctx: &EditorCtx) -> bool {
     let result: Option<(String, bool)> = None
         // Task list: "- [ ] " / "- [x] " / "* [ ] " etc.
         .or_else(|| {
-            let markers = ["- [ ] ", "- [x] ", "- [X] ", "* [ ] ", "* [x] ", "* [X] ", "+ [ ] ", "+ [x] ", "+ [X] "];
+            let markers = [
+                "- [ ] ", "- [x] ", "- [X] ", "* [ ] ", "* [x] ", "* [X] ", "+ [ ] ", "+ [x] ",
+                "+ [X] ",
+            ];
             for m in markers {
                 if let Some(rest) = trimmed.strip_prefix(m) {
                     return Some(("- [ ] ".to_string(), rest.is_empty()));
@@ -479,10 +475,14 @@ fn handle_list_continuation(ctx: &EditorCtx) -> bool {
         })
         // Blockquote: "> "
         .or_else(|| {
-            trimmed.strip_prefix("> ").map(|rest| ("> ".to_string(), rest.is_empty()))
+            trimmed
+                .strip_prefix("> ")
+                .map(|rest| ("> ".to_string(), rest.is_empty()))
         });
 
-    let Some((next_prefix, is_empty)) = result else { return false };
+    let Some((next_prefix, is_empty)) = result else {
+        return false;
+    };
 
     if is_empty {
         // Empty list item — remove the prefix
@@ -505,11 +505,10 @@ pub fn handle_source_view_keys(
     mods: gdk::ModifierType,
 ) -> glib::Propagation {
     // Ctrl+V with image on clipboard → store as vault asset
-    if key == gdk::Key::v
-        && mods.contains(gdk::ModifierType::CONTROL_MASK)
-        && try_paste_image(ctx) {
-            return glib::Propagation::Stop;
-        }
+    if key == gdk::Key::v && mods.contains(gdk::ModifierType::CONTROL_MASK) && try_paste_image(ctx)
+    {
+        return glib::Propagation::Stop;
+    }
 
     // Enter: smart list continuation (not with Shift)
     if (key == gdk::Key::Return || key == gdk::Key::KP_Enter)
@@ -571,7 +570,8 @@ pub fn md_line_prefix(buffer: &sourceview::Buffer, prefix: &str) {
 
     if line_text.starts_with(prefix) {
         // Remove prefix
-        let mut prefix_end = buffer.iter_at_offset(line_start.offset() + prefix.chars().count() as i32);
+        let mut prefix_end =
+            buffer.iter_at_offset(line_start.offset() + prefix.chars().count() as i32);
         buffer.delete(&mut line_start, &mut prefix_end);
     } else {
         // Strip any existing heading/list prefix first, then add new one
@@ -591,17 +591,38 @@ pub fn md_line_prefix(buffer: &sourceview::Buffer, prefix: &str) {
 pub fn strip_line_prefix(text: &str) -> &str {
     let t = text.trim_start();
     // Headings
-    if let Some(rest) = t.strip_prefix("######") { return rest.strip_prefix(' ').unwrap_or(rest); }
-    if let Some(rest) = t.strip_prefix("#####") { return rest.strip_prefix(' ').unwrap_or(rest); }
-    if let Some(rest) = t.strip_prefix("####") { return rest.strip_prefix(' ').unwrap_or(rest); }
-    if let Some(rest) = t.strip_prefix("###") { return rest.strip_prefix(' ').unwrap_or(rest); }
-    if let Some(rest) = t.strip_prefix("##") { return rest.strip_prefix(' ').unwrap_or(rest); }
-    if let Some(rest) = t.strip_prefix('#') { return rest.strip_prefix(' ').unwrap_or(rest); }
+    if let Some(rest) = t.strip_prefix("######") {
+        return rest.strip_prefix(' ').unwrap_or(rest);
+    }
+    if let Some(rest) = t.strip_prefix("#####") {
+        return rest.strip_prefix(' ').unwrap_or(rest);
+    }
+    if let Some(rest) = t.strip_prefix("####") {
+        return rest.strip_prefix(' ').unwrap_or(rest);
+    }
+    if let Some(rest) = t.strip_prefix("###") {
+        return rest.strip_prefix(' ').unwrap_or(rest);
+    }
+    if let Some(rest) = t.strip_prefix("##") {
+        return rest.strip_prefix(' ').unwrap_or(rest);
+    }
+    if let Some(rest) = t.strip_prefix('#') {
+        return rest.strip_prefix(' ').unwrap_or(rest);
+    }
     // Task list
-    if let Some(rest) = t.strip_prefix("- [x] ").or_else(|| t.strip_prefix("- [ ] ")) { return rest; }
+    if let Some(rest) = t
+        .strip_prefix("- [x] ")
+        .or_else(|| t.strip_prefix("- [ ] "))
+    {
+        return rest;
+    }
     // Bullet/ordered list
-    if let Some(rest) = t.strip_prefix("- ") { return rest; }
-    if let Some(rest) = t.strip_prefix("> ") { return rest; }
+    if let Some(rest) = t.strip_prefix("- ") {
+        return rest;
+    }
+    if let Some(rest) = t.strip_prefix("> ") {
+        return rest;
+    }
     // Ordered list like "1. "
     if let Some(dot_pos) = t.find(". ") {
         if t[..dot_pos].chars().all(|c| c.is_ascii_digit()) && dot_pos <= 3 {
@@ -622,22 +643,31 @@ pub fn toggle_checkbox_at_cursor(buffer: &sourceview::Buffer) {
     let line_text = buffer.text(&line_start, &line_end, true).to_string();
     let trimmed = line_text.trim_start();
 
-    if trimmed.starts_with("- [ ] ") {
+    // Detect checkbox prefix: "- [ ] ", "* [ ] ", or "+ [ ] " (with optional indentation)
+    let checkbox_prefix_len = if trimmed.starts_with("- ") || trimmed.starts_with("* ") || trimmed.starts_with("+ ") {
+        2 // skip "- ", "* ", or "+ "
+    } else {
+        0
+    };
+
+    if checkbox_prefix_len > 0 {
+        let after_prefix = &trimmed[checkbox_prefix_len..];
         let prefix_offset = line_text.len() - trimmed.len();
-        let check_start = line_start.offset() + prefix_offset as i32 + 2; // skip "- "
-        let mut cs = buffer.iter_at_offset(check_start);
-        let mut ce = buffer.iter_at_offset(check_start + 3); // "[ ]"
-        buffer.delete(&mut cs, &mut ce);
-        let mut ins = buffer.iter_at_offset(check_start);
-        buffer.insert(&mut ins, "[x]");
-    } else if trimmed.starts_with("- [x] ") || trimmed.starts_with("- [X] ") {
-        let prefix_offset = line_text.len() - trimmed.len();
-        let check_start = line_start.offset() + prefix_offset as i32 + 2; // skip "- "
-        let mut cs = buffer.iter_at_offset(check_start);
-        let mut ce = buffer.iter_at_offset(check_start + 3); // "[x]"
-        buffer.delete(&mut cs, &mut ce);
-        let mut ins = buffer.iter_at_offset(check_start);
-        buffer.insert(&mut ins, "[ ]");
+        let check_start = line_start.offset() + prefix_offset as i32 + checkbox_prefix_len as i32;
+
+        if after_prefix.starts_with("[ ] ") {
+            let mut cs = buffer.iter_at_offset(check_start);
+            let mut ce = buffer.iter_at_offset(check_start + 3); // "[ ]"
+            buffer.delete(&mut cs, &mut ce);
+            let mut ins = buffer.iter_at_offset(check_start);
+            buffer.insert(&mut ins, "[x]");
+        } else if after_prefix.starts_with("[x] ") || after_prefix.starts_with("[X] ") {
+            let mut cs = buffer.iter_at_offset(check_start);
+            let mut ce = buffer.iter_at_offset(check_start + 3); // "[x]"
+            buffer.delete(&mut cs, &mut ce);
+            let mut ins = buffer.iter_at_offset(check_start);
+            buffer.insert(&mut ins, "[ ]");
+        }
     }
 }
 
@@ -662,11 +692,7 @@ pub fn insert_link(ctx: &EditorCtx) {
     show_link_dialog(ctx, &initial_label, "https://");
 }
 
-pub fn show_link_dialog(
-    ctx: &EditorCtx,
-    initial_label: &str,
-    initial_url: &str,
-) {
+pub fn show_link_dialog(ctx: &EditorCtx, initial_label: &str, initial_url: &str) {
     let dialog = adw::AlertDialog::new(Some("Insert Link"), None);
 
     let vbox = gtk::Box::new(gtk::Orientation::Vertical, 8);
@@ -748,12 +774,7 @@ pub fn navigate_to_wiki_link(ctx: &EditorCtx, name: &str) {
     if let Some(id) = found_id {
         switch_to_note(ctx, &id);
     } else {
-        create_note(
-            ctx,
-            name.to_string(),
-            format!("# {name}\n\n"),
-            Vec::new(),
-        );
+        create_note(ctx, name.to_string(), format!("# {name}\n\n"), Vec::new());
     }
 }
 
@@ -856,7 +877,7 @@ fn detect_table_at_cursor(buffer: &sourceview::Buffer) -> Option<ParsedTable> {
 
     // Scan downward to find last table line
     let mut end_line = cursor_line;
-    while end_line < total_lines - 1 && is_table_line(&get_line_text(end_line + 1)) {
+    while end_line + 1 < total_lines && is_table_line(&get_line_text(end_line + 1)) {
         end_line += 1;
     }
 
@@ -931,8 +952,12 @@ fn table_to_markdown(table: &ParsedTable) -> String {
 }
 
 fn replace_table_in_buffer(buffer: &sourceview::Buffer, table: &ParsedTable, new_md: &str) {
-    let mut start = buffer.iter_at_line(table.start_line).unwrap_or(buffer.start_iter());
-    let mut end = buffer.iter_at_line(table.end_line).unwrap_or(buffer.end_iter());
+    let mut start = buffer
+        .iter_at_line(table.start_line)
+        .unwrap_or(buffer.start_iter());
+    let mut end = buffer
+        .iter_at_line(table.end_line)
+        .unwrap_or(buffer.end_iter());
     if !end.ends_line() {
         end.forward_to_line_end();
     }
@@ -941,7 +966,9 @@ fn replace_table_in_buffer(buffer: &sourceview::Buffer, table: &ParsedTable, new
         end.forward_char();
     }
     buffer.delete(&mut start, &mut end);
-    let mut ins = buffer.iter_at_line(table.start_line).unwrap_or(buffer.start_iter());
+    let mut ins = buffer
+        .iter_at_line(table.start_line)
+        .unwrap_or(buffer.start_iter());
     buffer.insert(&mut ins, new_md);
 }
 
@@ -962,7 +989,9 @@ pub fn table_add_column(ctx: &EditorCtx) {
         send_toast(ctx, "Place cursor inside a table first");
         return;
     };
-    table.headers.push(format!("Column {}", table.headers.len() + 1));
+    table
+        .headers
+        .push(format!("Column {}", table.headers.len() + 1));
     for row in &mut table.rows {
         row.push(String::new());
     }
@@ -1002,34 +1031,36 @@ pub fn insert_image_snippet(ctx: &EditorCtx) {
 
     let ctx = ctx.clone();
     let window = ctx.window.clone();
-    dialog.open(Some(&window), gtk::gio::Cancellable::NONE, move |result: Result<gtk::gio::File, gtk::glib::Error>| {
-        if let Ok(file) = result {
-            if let Some(path) = file.path() {
-                let filename = path
-                    .file_name()
-                    .and_then(|n| n.to_str())
-                    .unwrap_or("image")
-                    .to_string();
-                match fs::read(&path) {
-                    Ok(bytes) => {
-                        let mime = mime_from_ext(
-                            path.extension()
-                                .and_then(|e| e.to_str())
-                                .unwrap_or(""),
-                        );
-                        store_image_as_asset(&ctx, &bytes, &filename, &mime);
-                    }
-                    Err(e) => {
-                        show_error(
-                            &ctx.window,
-                            "Insert image failed",
-                            &format!("Could not read file: {e}"),
-                        );
+    dialog.open(
+        Some(&window),
+        gtk::gio::Cancellable::NONE,
+        move |result: Result<gtk::gio::File, gtk::glib::Error>| {
+            if let Ok(file) = result {
+                if let Some(path) = file.path() {
+                    let filename = path
+                        .file_name()
+                        .and_then(|n| n.to_str())
+                        .unwrap_or("image")
+                        .to_string();
+                    match fs::read(&path) {
+                        Ok(bytes) => {
+                            let mime = mime_from_ext(
+                                path.extension().and_then(|e| e.to_str()).unwrap_or(""),
+                            );
+                            store_image_as_asset(&ctx, &bytes, &filename, &mime);
+                        }
+                        Err(e) => {
+                            show_error(
+                                &ctx.window,
+                                "Insert image failed",
+                                &format!("Could not read file: {e}"),
+                            );
+                        }
                     }
                 }
             }
-        }
-    });
+        },
+    );
 }
 
 pub fn try_paste_image(ctx: &EditorCtx) -> bool {
@@ -1049,7 +1080,14 @@ pub fn try_paste_image(ctx: &EditorCtx) -> bool {
     }
 
     let ctx = ctx.clone();
+    // Capture the active note ID now so we can verify it hasn't changed
+    // by the time the async clipboard read completes.
+    let paste_note_id = ctx.state.borrow().active_note_id.clone();
     clipboard.read_texture_async(gtk::gio::Cancellable::NONE, move |result| {
+        // Only proceed if we're still on the same note
+        if ctx.state.borrow().active_note_id != paste_note_id {
+            return;
+        }
         if let Ok(Some(texture)) = result {
             // Use a randomized temp filename to avoid symlink/race attacks.
             let random_name = format!("pithos-paste-{}.png", generate_asset_id());
@@ -1105,7 +1143,9 @@ pub fn store_image_as_asset(ctx: &EditorCtx, data: &[u8], filename: &str, mime: 
             data_owned
         };
 
-        if let Err(e) = pithos_core::vault::write_asset(&vault_folder, &asset_id_thread, &write_data) {
+        if let Err(e) =
+            pithos_core::vault::write_asset(&vault_folder, &asset_id_thread, &write_data)
+        {
             let _ = tx.send(Err(format!("Asset write failed: {e}")));
         } else {
             let _ = tx.send(Ok(()));
@@ -1214,9 +1254,8 @@ pub fn update_status_full(ctx: &EditorCtx, text: &str) {
             .set_label(&format!("{folder_name}{}", note.name));
 
         // Meta label in ActionBar: created/modified
-        ctx.meta_label.set_label(&format!(
-            "Created {created}  \u{2022}  Modified {modified}"
-        ));
+        ctx.meta_label
+            .set_label(&format!("Created {created}  \u{2022}  Modified {modified}"));
     }
 }
 
@@ -1273,28 +1312,35 @@ pub fn hide_find_bar(ctx: &EditorCtx) {
 }
 
 pub fn find_next(ctx: &EditorCtx) {
-    let cursor = ctx.source_buffer.iter_at_offset(ctx.source_buffer.cursor_position());
+    let cursor = ctx
+        .source_buffer
+        .iter_at_offset(ctx.source_buffer.cursor_position());
     if let Some((mut start, end, _wrapped)) = ctx.search_context.forward(&cursor) {
         // If the match is right at the cursor, move forward past it to find the next one
         if start.offset() == cursor.offset() {
             if let Some((s2, e2, _)) = ctx.search_context.forward(&end) {
                 ctx.source_buffer.select_range(&s2, &e2);
-                ctx.source_view.scroll_to_iter(&mut s2.clone(), 0.1, false, 0.0, 0.0);
+                ctx.source_view
+                    .scroll_to_iter(&mut s2.clone(), 0.1, false, 0.0, 0.0);
                 update_find_match_label(ctx);
                 return;
             }
         }
         ctx.source_buffer.select_range(&start, &end);
-        ctx.source_view.scroll_to_iter(&mut start, 0.1, false, 0.0, 0.0);
+        ctx.source_view
+            .scroll_to_iter(&mut start, 0.1, false, 0.0, 0.0);
     }
     update_find_match_label(ctx);
 }
 
 pub fn find_prev(ctx: &EditorCtx) {
-    let cursor = ctx.source_buffer.iter_at_offset(ctx.source_buffer.cursor_position());
+    let cursor = ctx
+        .source_buffer
+        .iter_at_offset(ctx.source_buffer.cursor_position());
     if let Some((mut start, end, _wrapped)) = ctx.search_context.backward(&cursor) {
         ctx.source_buffer.select_range(&start, &end);
-        ctx.source_view.scroll_to_iter(&mut start, 0.1, false, 0.0, 0.0);
+        ctx.source_view
+            .scroll_to_iter(&mut start, 0.1, false, 0.0, 0.0);
     }
     update_find_match_label(ctx);
 }
@@ -1302,7 +1348,9 @@ pub fn find_prev(ctx: &EditorCtx) {
 pub fn replace_one(ctx: &EditorCtx) {
     let replacement = ctx.replace_entry.text().to_string();
     if let Some((mut start, mut end)) = ctx.source_buffer.selection_bounds() {
-        let _ = ctx.search_context.replace(&mut start, &mut end, &replacement);
+        let _ = ctx
+            .search_context
+            .replace(&mut start, &mut end, &replacement);
         process_buffer_change(ctx);
         find_next(ctx);
     }
@@ -1313,7 +1361,11 @@ pub fn replace_all(ctx: &EditorCtx) {
     let mut count = 0;
     let mut iter = ctx.source_buffer.start_iter();
     while let Some((mut start, mut end, _)) = ctx.search_context.forward(&iter) {
-        if ctx.search_context.replace(&mut start, &mut end, &replacement).is_ok() {
+        if ctx
+            .search_context
+            .replace(&mut start, &mut end, &replacement)
+            .is_ok()
+        {
             count += 1;
             iter = start; // after replacement, start is moved past the replacement
         } else {
@@ -1334,7 +1386,8 @@ fn update_find_match_label(ctx: &EditorCtx) {
     } else if count == 0 {
         ctx.find_match_label.set_label("No matches");
     } else {
-        ctx.find_match_label.set_label(&format!("{count} match(es)"));
+        ctx.find_match_label
+            .set_label(&format!("{count} match(es)"));
     }
 }
 

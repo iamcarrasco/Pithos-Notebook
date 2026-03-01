@@ -1,8 +1,8 @@
-use adw::prelude::*;
-use sourceview5::prelude::*;
-use sourceview5 as sourceview;
-use pithos_core::state::*;
 use crate::*;
+use adw::prelude::*;
+use pithos_core::state::*;
+use sourceview5 as sourceview;
+use sourceview5::prelude::*;
 
 // ---------------------------------------------------------------------------
 // Shared utility functions used by multiple modules
@@ -106,6 +106,7 @@ pub fn show_info(parent: &adw::ApplicationWindow, title: &str, message: &str) {
 pub fn show_error(parent: &adw::ApplicationWindow, title: &str, message: &str) {
     let dialog = adw::AlertDialog::new(Some(title), Some(message));
     dialog.add_response("ok", "OK");
+    dialog.set_response_appearance("ok", adw::ResponseAppearance::Destructive);
     dialog.set_close_response("ok");
     dialog.present(Some(parent));
 }
@@ -152,11 +153,15 @@ pub fn toggle_zen_mode(ctx: &EditorCtx) {
     ctx.breadcrumbs.set_visible(!zen);
     // In zen mode, hide the preview side pane
     if zen {
+        // Save current split position before entering zen mode
+        ctx.pre_zen_split_pos.set(ctx.split.position());
         ctx.preview_panel.set_visible(false);
         ctx.split.set_position(ctx.split.allocated_width());
     } else {
         ctx.preview_panel.set_visible(true);
-        ctx.split.set_position(700);
+        // Restore the split position saved before entering zen mode
+        let saved_pos = ctx.pre_zen_split_pos.get();
+        ctx.split.set_position(if saved_pos > 0 { saved_pos } else { ctx.split.allocated_width() / 2 });
         // Restore sidebar state
         let sidebar_visible = ctx.state.borrow().sidebar_visible;
         ctx.split_view.set_show_sidebar(sidebar_visible);

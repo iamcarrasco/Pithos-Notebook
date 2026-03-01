@@ -1,6 +1,6 @@
+use crate::*;
 use adw::prelude::*;
 use pithos_core::state::*;
-use crate::*;
 
 // ---------------------------------------------------------------------------
 // Content menu
@@ -15,9 +15,7 @@ pub fn build_content_menu() -> gtk::gio::Menu {
     section1.append(Some("Save Snapshot"), Some("win.save-snapshot"));
     section1.append(Some("Version History"), Some("win.version-history"));
     section1.append(Some("Move to Folder\u{2026}"), Some("win.move-to-folder"));
-    section1.append(Some("Export as Markdown\u{2026}"), Some("win.export-markdown"));
-    section1.append(Some("Export as HTML\u{2026}"), Some("win.export-html"));
-    section1.append(Some("Export as PDF\u{2026}"), Some("win.export-pdf"));
+    section1.append(Some("Export\u{2026}"), Some("win.export"));
     menu.append_section(None, &section1);
 
     let section2 = gtk::gio::Menu::new();
@@ -27,7 +25,10 @@ pub fn build_content_menu() -> gtk::gio::Menu {
     menu.append_section(None, &section2);
 
     let section3 = gtk::gio::Menu::new();
-    section3.append(Some("Change Passphrase\u{2026}"), Some("win.change-passphrase"));
+    section3.append(
+        Some("Change Passphrase\u{2026}"),
+        Some("win.change-passphrase"),
+    );
     section3.append(Some("Lock Vault"), Some("win.lock-vault"));
     section3.append(Some("Change Vault\u{2026}"), Some("win.change-vault"));
     menu.append_section(None, &section3);
@@ -78,7 +79,9 @@ pub fn wire_menu_actions(ctx: &EditorCtx) {
     {
         let ctx = ctx.clone();
         sort_action.connect_activate(move |action, param| {
-            let Some(val) = param.and_then(|p| p.get::<String>()) else { return };
+            let Some(val) = param.and_then(|p| p.get::<String>()) else {
+                return;
+            };
             action.set_state(&val.to_variant());
             let order = match val.as_str() {
                 "manual" => SortOrder::Manual,
@@ -99,12 +102,18 @@ pub fn wire_menu_actions(ctx: &EditorCtx) {
 
     // New folder
     let action = SimpleAction::new("new-folder", None);
-    { let ctx = ctx.clone(); action.connect_activate(move |_, _| create_folder(&ctx, None)); }
+    {
+        let ctx = ctx.clone();
+        action.connect_activate(move |_, _| create_folder(&ctx, None));
+    }
     window.add_action(&action);
 
     // New from template
     let action = SimpleAction::new("new-from-template", None);
-    { let ctx = ctx.clone(); action.connect_activate(move |_, _| show_template_picker(&ctx)); }
+    {
+        let ctx = ctx.clone();
+        action.connect_activate(move |_, _| show_template_picker(&ctx));
+    }
     window.add_action(&action);
 
     // View trash
@@ -126,44 +135,52 @@ pub fn wire_menu_actions(ctx: &EditorCtx) {
 
     // Toggle theme
     let action = SimpleAction::new("toggle-theme", None);
-    { let ctx = ctx.clone(); action.connect_activate(move |_, _| toggle_theme(&ctx)); }
+    {
+        let ctx = ctx.clone();
+        action.connect_activate(move |_, _| toggle_theme(&ctx));
+    }
     window.add_action(&action);
 
     // --- Content menu actions ---
 
     // Rename note
     let action = SimpleAction::new("rename-note", None);
-    { let ctx = ctx.clone(); action.connect_activate(move |_, _| rename_note_dialog(&ctx)); }
+    {
+        let ctx = ctx.clone();
+        action.connect_activate(move |_, _| rename_note_dialog(&ctx));
+    }
     window.add_action(&action);
 
     // Save snapshot
     let action = SimpleAction::new("save-snapshot", None);
-    { let ctx = ctx.clone(); action.connect_activate(move |_, _| save_manual_snapshot(&ctx)); }
+    {
+        let ctx = ctx.clone();
+        action.connect_activate(move |_, _| save_manual_snapshot(&ctx));
+    }
     window.add_action(&action);
 
     // Version history
     let action = SimpleAction::new("version-history", None);
-    { let ctx = ctx.clone(); action.connect_activate(move |_, _| show_history_dialog(&ctx)); }
+    {
+        let ctx = ctx.clone();
+        action.connect_activate(move |_, _| show_history_dialog(&ctx));
+    }
     window.add_action(&action);
 
     // Move to folder
     let action = SimpleAction::new("move-to-folder", None);
-    { let ctx = ctx.clone(); action.connect_activate(move |_, _| move_note_to_folder(&ctx)); }
+    {
+        let ctx = ctx.clone();
+        action.connect_activate(move |_, _| move_note_to_folder(&ctx));
+    }
     window.add_action(&action);
 
-    // Export as markdown
-    let action = SimpleAction::new("export-markdown", None);
-    { let ctx = ctx.clone(); action.connect_activate(move |_, _| save_document_as(&ctx)); }
-    window.add_action(&action);
-
-    // Export as HTML
-    let action = SimpleAction::new("export-html", None);
-    { let ctx = ctx.clone(); action.connect_activate(move |_, _| export_as_html(&ctx)); }
-    window.add_action(&action);
-
-    // Export as PDF
-    let action = SimpleAction::new("export-pdf", None);
-    { let ctx = ctx.clone(); action.connect_activate(move |_, _| export_as_pdf(&ctx)); }
+    // Export
+    let action = SimpleAction::new("export", None);
+    {
+        let ctx = ctx.clone();
+        action.connect_activate(move |_, _| export_document(&ctx));
+    }
     window.add_action(&action);
 
     // Spellcheck toggle (stub — requires libspelling Rust bindings)
@@ -176,19 +193,32 @@ pub fn wire_menu_actions(ctx: &EditorCtx) {
                 s.spellcheck_enabled = !s.spellcheck_enabled;
                 s.spellcheck_enabled
             };
-            send_toast(&ctx, if on { "Spellcheck on (requires libspelling)" } else { "Spellcheck off" });
+            send_toast(
+                &ctx,
+                if on {
+                    "Spellcheck on (requires libspelling)"
+                } else {
+                    "Spellcheck off"
+                },
+            );
         });
     }
     window.add_action(&action);
 
     // Zen mode
     let action = SimpleAction::new("zen-mode", None);
-    { let ctx = ctx.clone(); action.connect_activate(move |_, _| toggle_zen_mode(&ctx)); }
+    {
+        let ctx = ctx.clone();
+        action.connect_activate(move |_, _| toggle_zen_mode(&ctx));
+    }
     window.add_action(&action);
 
     // Fullscreen
     let action = SimpleAction::new("fullscreen", None);
-    { let ctx = ctx.clone(); action.connect_activate(move |_, _| toggle_fullscreen(&ctx)); }
+    {
+        let ctx = ctx.clone();
+        action.connect_activate(move |_, _| toggle_fullscreen(&ctx));
+    }
     window.add_action(&action);
 
     // --- Sidebar header button actions (not in menu) ---
@@ -210,39 +240,60 @@ pub fn wire_menu_actions(ctx: &EditorCtx) {
 
     // Save vault (Ctrl+S)
     let action = SimpleAction::new("save-vault", None);
-    { let ctx = ctx.clone(); action.connect_activate(move |_, _| save_document(&ctx)); }
+    {
+        let ctx = ctx.clone();
+        action.connect_activate(move |_, _| save_document(&ctx));
+    }
     window.add_action(&action);
 
     // Import file (Ctrl+O)
     let action = SimpleAction::new("import-file", None);
-    { let ctx = ctx.clone(); action.connect_activate(move |_, _| open_document(&ctx)); }
+    {
+        let ctx = ctx.clone();
+        action.connect_activate(move |_, _| open_document(&ctx));
+    }
     window.add_action(&action);
 
     // Delete note
     let action = SimpleAction::new("delete-note", None);
-    { let ctx = ctx.clone(); action.connect_activate(move |_, _| delete_note(&ctx)); }
+    {
+        let ctx = ctx.clone();
+        action.connect_activate(move |_, _| delete_note(&ctx));
+    }
     window.add_action(&action);
 
     // Empty trash
     let action = SimpleAction::new("empty-trash", None);
-    { let ctx = ctx.clone(); action.connect_activate(move |_, _| empty_trash_action(&ctx)); }
+    {
+        let ctx = ctx.clone();
+        action.connect_activate(move |_, _| empty_trash_action(&ctx));
+    }
     window.add_action(&action);
 
     // Daily note
     let action = SimpleAction::new("daily-note", None);
-    { let ctx = ctx.clone(); action.connect_activate(move |_, _| open_or_create_daily_note(&ctx)); }
+    {
+        let ctx = ctx.clone();
+        action.connect_activate(move |_, _| open_or_create_daily_note(&ctx));
+    }
     window.add_action(&action);
 
     // Toggle sidebar
     let action = SimpleAction::new("toggle-sidebar", None);
-    { let ctx = ctx.clone(); action.connect_activate(move |_, _| toggle_sidebar(&ctx)); }
+    {
+        let ctx = ctx.clone();
+        action.connect_activate(move |_, _| toggle_sidebar(&ctx));
+    }
     window.add_action(&action);
 
     // --- Shortcut-only actions (no menu entry) ---
 
     // Save as (Ctrl+Shift+S)
     let action = SimpleAction::new("save-as", None);
-    { let ctx = ctx.clone(); action.connect_activate(move |_, _| save_document_as(&ctx)); }
+    {
+        let ctx = ctx.clone();
+        action.connect_activate(move |_, _| save_document_as(&ctx));
+    }
     window.add_action(&action);
 
     // Close tab (Ctrl+W)
@@ -258,12 +309,18 @@ pub fn wire_menu_actions(ctx: &EditorCtx) {
 
     // Undo (Ctrl+Z)
     let action = SimpleAction::new("undo", None);
-    { let ctx = ctx.clone(); action.connect_activate(move |_, _| undo(&ctx)); }
+    {
+        let ctx = ctx.clone();
+        action.connect_activate(move |_, _| undo(&ctx));
+    }
     window.add_action(&action);
 
     // Redo (Ctrl+Shift+Z / Ctrl+Y)
     let action = SimpleAction::new("redo", None);
-    { let ctx = ctx.clone(); action.connect_activate(move |_, _| redo(&ctx)); }
+    {
+        let ctx = ctx.clone();
+        action.connect_activate(move |_, _| redo(&ctx));
+    }
     window.add_action(&action);
 
     // Focus search (Ctrl+Shift+F)
@@ -280,174 +337,258 @@ pub fn wire_menu_actions(ctx: &EditorCtx) {
     // --- Formatting actions ---
 
     let action = SimpleAction::new("fmt-bold", None);
-    { let ctx = ctx.clone(); action.connect_activate(move |_, _| {
-        md_wrap(&ctx.source_buffer, "**", "**", "bold text");
-        process_buffer_change(&ctx);
-    }); }
+    {
+        let ctx = ctx.clone();
+        action.connect_activate(move |_, _| {
+            md_wrap(&ctx.source_buffer, "**", "**", "bold text");
+            process_buffer_change(&ctx);
+        });
+    }
     window.add_action(&action);
 
     let action = SimpleAction::new("fmt-italic", None);
-    { let ctx = ctx.clone(); action.connect_activate(move |_, _| {
-        md_wrap(&ctx.source_buffer, "*", "*", "italic text");
-        process_buffer_change(&ctx);
-    }); }
+    {
+        let ctx = ctx.clone();
+        action.connect_activate(move |_, _| {
+            md_wrap(&ctx.source_buffer, "*", "*", "italic text");
+            process_buffer_change(&ctx);
+        });
+    }
     window.add_action(&action);
 
     let action = SimpleAction::new("fmt-underline", None);
-    { let ctx = ctx.clone(); action.connect_activate(move |_, _| {
-        md_wrap(&ctx.source_buffer, "<u>", "</u>", "underlined");
-        process_buffer_change(&ctx);
-    }); }
+    {
+        let ctx = ctx.clone();
+        action.connect_activate(move |_, _| {
+            md_wrap(&ctx.source_buffer, "<u>", "</u>", "underlined");
+            process_buffer_change(&ctx);
+        });
+    }
     window.add_action(&action);
 
     let action = SimpleAction::new("fmt-strike", None);
-    { let ctx = ctx.clone(); action.connect_activate(move |_, _| {
-        md_wrap(&ctx.source_buffer, "~~", "~~", "strikethrough");
-        process_buffer_change(&ctx);
-    }); }
+    {
+        let ctx = ctx.clone();
+        action.connect_activate(move |_, _| {
+            md_wrap(&ctx.source_buffer, "~~", "~~", "strikethrough");
+            process_buffer_change(&ctx);
+        });
+    }
     window.add_action(&action);
 
     let action = SimpleAction::new("fmt-code", None);
-    { let ctx = ctx.clone(); action.connect_activate(move |_, _| {
-        md_wrap(&ctx.source_buffer, "`", "`", "code");
-        process_buffer_change(&ctx);
-    }); }
+    {
+        let ctx = ctx.clone();
+        action.connect_activate(move |_, _| {
+            md_wrap(&ctx.source_buffer, "`", "`", "code");
+            process_buffer_change(&ctx);
+        });
+    }
     window.add_action(&action);
 
     let action = SimpleAction::new("fmt-link", None);
-    { let ctx = ctx.clone(); action.connect_activate(move |_, _| {
-        insert_link(&ctx);
-    }); }
+    {
+        let ctx = ctx.clone();
+        action.connect_activate(move |_, _| {
+            insert_link(&ctx);
+        });
+    }
     window.add_action(&action);
 
     let action = SimpleAction::new("fmt-h1", None);
-    { let ctx = ctx.clone(); action.connect_activate(move |_, _| {
-        md_line_prefix(&ctx.source_buffer, "# ");
-        process_buffer_change(&ctx);
-    }); }
+    {
+        let ctx = ctx.clone();
+        action.connect_activate(move |_, _| {
+            md_line_prefix(&ctx.source_buffer, "# ");
+            process_buffer_change(&ctx);
+        });
+    }
     window.add_action(&action);
 
     let action = SimpleAction::new("fmt-h2", None);
-    { let ctx = ctx.clone(); action.connect_activate(move |_, _| {
-        md_line_prefix(&ctx.source_buffer, "## ");
-        process_buffer_change(&ctx);
-    }); }
+    {
+        let ctx = ctx.clone();
+        action.connect_activate(move |_, _| {
+            md_line_prefix(&ctx.source_buffer, "## ");
+            process_buffer_change(&ctx);
+        });
+    }
     window.add_action(&action);
 
     let action = SimpleAction::new("fmt-h3", None);
-    { let ctx = ctx.clone(); action.connect_activate(move |_, _| {
-        md_line_prefix(&ctx.source_buffer, "### ");
-        process_buffer_change(&ctx);
-    }); }
+    {
+        let ctx = ctx.clone();
+        action.connect_activate(move |_, _| {
+            md_line_prefix(&ctx.source_buffer, "### ");
+            process_buffer_change(&ctx);
+        });
+    }
     window.add_action(&action);
 
     let action = SimpleAction::new("fmt-h4", None);
-    { let ctx = ctx.clone(); action.connect_activate(move |_, _| {
-        md_line_prefix(&ctx.source_buffer, "#### ");
-        process_buffer_change(&ctx);
-    }); }
+    {
+        let ctx = ctx.clone();
+        action.connect_activate(move |_, _| {
+            md_line_prefix(&ctx.source_buffer, "#### ");
+            process_buffer_change(&ctx);
+        });
+    }
     window.add_action(&action);
 
     let action = SimpleAction::new("fmt-h5", None);
-    { let ctx = ctx.clone(); action.connect_activate(move |_, _| {
-        md_line_prefix(&ctx.source_buffer, "##### ");
-        process_buffer_change(&ctx);
-    }); }
+    {
+        let ctx = ctx.clone();
+        action.connect_activate(move |_, _| {
+            md_line_prefix(&ctx.source_buffer, "##### ");
+            process_buffer_change(&ctx);
+        });
+    }
     window.add_action(&action);
 
     let action = SimpleAction::new("fmt-h6", None);
-    { let ctx = ctx.clone(); action.connect_activate(move |_, _| {
-        md_line_prefix(&ctx.source_buffer, "###### ");
-        process_buffer_change(&ctx);
-    }); }
+    {
+        let ctx = ctx.clone();
+        action.connect_activate(move |_, _| {
+            md_line_prefix(&ctx.source_buffer, "###### ");
+            process_buffer_change(&ctx);
+        });
+    }
     window.add_action(&action);
 
     let action = SimpleAction::new("fmt-quote", None);
-    { let ctx = ctx.clone(); action.connect_activate(move |_, _| {
-        md_line_prefix(&ctx.source_buffer, "> ");
-        process_buffer_change(&ctx);
-    }); }
+    {
+        let ctx = ctx.clone();
+        action.connect_activate(move |_, _| {
+            md_line_prefix(&ctx.source_buffer, "> ");
+            process_buffer_change(&ctx);
+        });
+    }
     window.add_action(&action);
 
     let action = SimpleAction::new("fmt-bullet-list", None);
-    { let ctx = ctx.clone(); action.connect_activate(move |_, _| {
-        md_line_prefix(&ctx.source_buffer, "- ");
-        process_buffer_change(&ctx);
-    }); }
+    {
+        let ctx = ctx.clone();
+        action.connect_activate(move |_, _| {
+            md_line_prefix(&ctx.source_buffer, "- ");
+            process_buffer_change(&ctx);
+        });
+    }
     window.add_action(&action);
 
     let action = SimpleAction::new("fmt-ordered-list", None);
-    { let ctx = ctx.clone(); action.connect_activate(move |_, _| {
-        md_line_prefix(&ctx.source_buffer, "1. ");
-        process_buffer_change(&ctx);
-    }); }
+    {
+        let ctx = ctx.clone();
+        action.connect_activate(move |_, _| {
+            md_line_prefix(&ctx.source_buffer, "1. ");
+            process_buffer_change(&ctx);
+        });
+    }
     window.add_action(&action);
 
     let action = SimpleAction::new("fmt-task-list", None);
-    { let ctx = ctx.clone(); action.connect_activate(move |_, _| {
-        md_line_prefix(&ctx.source_buffer, "- [ ] ");
-        process_buffer_change(&ctx);
-    }); }
+    {
+        let ctx = ctx.clone();
+        action.connect_activate(move |_, _| {
+            md_line_prefix(&ctx.source_buffer, "- [ ] ");
+            process_buffer_change(&ctx);
+        });
+    }
     window.add_action(&action);
 
     let action = SimpleAction::new("toggle-checkbox", None);
-    { let ctx = ctx.clone(); action.connect_activate(move |_, _| {
-        toggle_checkbox_at_cursor(&ctx.source_buffer);
-        process_buffer_change(&ctx);
-    }); }
+    {
+        let ctx = ctx.clone();
+        action.connect_activate(move |_, _| {
+            toggle_checkbox_at_cursor(&ctx.source_buffer);
+            process_buffer_change(&ctx);
+        });
+    }
     window.add_action(&action);
 
     // Command palette
     let action = SimpleAction::new("command-palette", None);
-    { let ctx = ctx.clone(); action.connect_activate(move |_, _| show_command_palette(&ctx)); }
+    {
+        let ctx = ctx.clone();
+        action.connect_activate(move |_, _| show_command_palette(&ctx));
+    }
     window.add_action(&action);
 
     // Find in editor (Ctrl+F)
     let action = SimpleAction::new("find-in-editor", None);
-    { let ctx = ctx.clone(); action.connect_activate(move |_, _| show_find_bar(&ctx, false)); }
+    {
+        let ctx = ctx.clone();
+        action.connect_activate(move |_, _| show_find_bar(&ctx, false));
+    }
     window.add_action(&action);
 
     // Find and replace (Ctrl+H)
     let action = SimpleAction::new("find-replace", None);
-    { let ctx = ctx.clone(); action.connect_activate(move |_, _| show_find_bar(&ctx, true)); }
+    {
+        let ctx = ctx.clone();
+        action.connect_activate(move |_, _| show_find_bar(&ctx, true));
+    }
     window.add_action(&action);
 
     // Find next
     let action = SimpleAction::new("find-next", None);
-    { let ctx = ctx.clone(); action.connect_activate(move |_, _| find_next(&ctx)); }
+    {
+        let ctx = ctx.clone();
+        action.connect_activate(move |_, _| find_next(&ctx));
+    }
     window.add_action(&action);
 
     // Find previous
     let action = SimpleAction::new("find-prev", None);
-    { let ctx = ctx.clone(); action.connect_activate(move |_, _| find_prev(&ctx)); }
+    {
+        let ctx = ctx.clone();
+        action.connect_activate(move |_, _| find_prev(&ctx));
+    }
     window.add_action(&action);
 
     // Hide find bar
     let action = SimpleAction::new("hide-find", None);
-    { let ctx = ctx.clone(); action.connect_activate(move |_, _| hide_find_bar(&ctx)); }
+    {
+        let ctx = ctx.clone();
+        action.connect_activate(move |_, _| hide_find_bar(&ctx));
+    }
     window.add_action(&action);
 
     // Replace one
     let action = SimpleAction::new("replace-one", None);
-    { let ctx = ctx.clone(); action.connect_activate(move |_, _| replace_one(&ctx)); }
+    {
+        let ctx = ctx.clone();
+        action.connect_activate(move |_, _| replace_one(&ctx));
+    }
     window.add_action(&action);
 
     // Replace all
     let action = SimpleAction::new("replace-all", None);
-    { let ctx = ctx.clone(); action.connect_activate(move |_, _| replace_all(&ctx)); }
+    {
+        let ctx = ctx.clone();
+        action.connect_activate(move |_, _| replace_all(&ctx));
+    }
     window.add_action(&action);
 
     // Table editing
     let action = SimpleAction::new("table-add-row", None);
-    { let ctx = ctx.clone(); action.connect_activate(move |_, _| table_add_row(&ctx)); }
+    {
+        let ctx = ctx.clone();
+        action.connect_activate(move |_, _| table_add_row(&ctx));
+    }
     window.add_action(&action);
 
     let action = SimpleAction::new("table-add-column", None);
-    { let ctx = ctx.clone(); action.connect_activate(move |_, _| table_add_column(&ctx)); }
+    {
+        let ctx = ctx.clone();
+        action.connect_activate(move |_, _| table_add_column(&ctx));
+    }
     window.add_action(&action);
 
     let action = SimpleAction::new("table-align", None);
-    { let ctx = ctx.clone(); action.connect_activate(move |_, _| table_align(&ctx)); }
+    {
+        let ctx = ctx.clone();
+        action.connect_activate(move |_, _| table_align(&ctx));
+    }
     window.add_action(&action);
 
     // Lock vault — save, clear editor, go to unlock (keeps vault path)
@@ -455,19 +596,17 @@ pub fn wire_menu_actions(ctx: &EditorCtx) {
     {
         let ctx = ctx.clone();
         action.connect_activate(move |_, _| {
-            perform_vault_save_sync(&ctx);
+            if !perform_vault_save_sync(&ctx) {
+                return;
+            }
             let vault_folder = ctx.vault_folder.borrow().clone();
 
             // Clear sensitive key material and stop background timers.
+            stop_background_tasks(&ctx);
             *ctx.cached_key.borrow_mut() = None;
-            if let Some(source_id) = ctx.save_timeout_id.take() {
-                source_id.remove();
-            }
-            if let Some(source_id) = ctx.sync_timeout_id.take() {
-                source_id.remove();
-            }
-            if let Some(source_id) = ctx.search_timeout_id.take() {
-                source_id.remove();
+            {
+                let mut state = ctx.state.borrow_mut();
+                state.suppress_sync = true;
             }
             // Clear editor buffer content from memory.
             ctx.source_buffer.set_text("");
@@ -490,17 +629,26 @@ pub fn wire_menu_actions(ctx: &EditorCtx) {
 
     // Change passphrase
     let action = SimpleAction::new("change-passphrase", None);
-    { let ctx = ctx.clone(); action.connect_activate(move |_, _| show_change_passphrase_dialog(&ctx)); }
+    {
+        let ctx = ctx.clone();
+        action.connect_activate(move |_, _| show_change_passphrase_dialog(&ctx));
+    }
     window.add_action(&action);
 
     // Open vault
     let action = SimpleAction::new("open-vault", None);
-    { let ctx = ctx.clone(); action.connect_activate(move |_, _| show_open_vault_dialog(&ctx)); }
+    {
+        let ctx = ctx.clone();
+        action.connect_activate(move |_, _| show_open_vault_dialog(&ctx));
+    }
     window.add_action(&action);
 
     // New vault
     let action = SimpleAction::new("new-vault", None);
-    { let ctx = ctx.clone(); action.connect_activate(move |_, _| show_new_vault_dialog(&ctx)); }
+    {
+        let ctx = ctx.clone();
+        action.connect_activate(move |_, _| show_new_vault_dialog(&ctx));
+    }
     window.add_action(&action);
 
     // Keyboard shortcuts window
@@ -535,7 +683,10 @@ pub fn wire_menu_actions(ctx: &EditorCtx) {
 
     // Settings
     let action = SimpleAction::new("show-settings", None);
-    { let ctx = ctx.clone(); action.connect_activate(move |_, _| show_settings_dialog(&ctx)); }
+    {
+        let ctx = ctx.clone();
+        action.connect_activate(move |_, _| show_settings_dialog(&ctx));
+    }
     window.add_action(&action);
 }
 
@@ -597,7 +748,9 @@ pub fn wire_toolbar_signals(ctx: &EditorCtx, tb: &ToolbarWidgets) {
             let line = cursor.line();
             let mut line_start = buffer.iter_at_line(line).unwrap_or(cursor);
             let mut line_end = line_start;
-            if !line_end.ends_line() { line_end.forward_to_line_end(); }
+            if !line_end.ends_line() {
+                line_end.forward_to_line_end();
+            }
             let line_text = buffer.text(&line_start, &line_end, true).to_string();
             let stripped = strip_line_prefix(&line_text);
             buffer.delete(&mut line_start, &mut line_end);
@@ -772,11 +925,13 @@ pub fn wire_toolbar_signals(ctx: &EditorCtx, tb: &ToolbarWidgets) {
     }
     {
         let ctx = ctx.clone();
-        tb.fullscreen.connect_clicked(move |_| toggle_fullscreen(&ctx));
+        tb.fullscreen
+            .connect_clicked(move |_| toggle_fullscreen(&ctx));
     }
     {
         let ctx = ctx.clone();
-        tb.image.connect_clicked(move |_| insert_image_snippet(&ctx));
+        tb.image
+            .connect_clicked(move |_| insert_image_snippet(&ctx));
     }
     for (lang, btn) in &tb.code_languages {
         let ctx = ctx.clone();

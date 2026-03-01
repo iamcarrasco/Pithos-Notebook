@@ -1,11 +1,11 @@
-pub mod types;
-pub mod window;
+pub mod dialogs;
 pub mod sidebar;
 pub mod toolbar;
-pub mod dialogs;
+pub mod types;
+pub mod window;
 
-pub use types::*;
-pub use window::*;
+pub use dialogs::*;
 pub use sidebar::*;
 pub use toolbar::*;
-pub use dialogs::*;
+pub use types::*;
+pub use window::*;

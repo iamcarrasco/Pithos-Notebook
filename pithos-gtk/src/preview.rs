@@ -1,6 +1,6 @@
+use crate::*;
 use pithos_core::crypto;
 use pithos_core::vault;
-use crate::*;
 use std::fs;
 
 /// Generate a random base64 nonce for Content-Security-Policy script-src.
@@ -15,7 +15,9 @@ fn generate_csp_nonce() -> String {
 fn strip_script_tags(html: &mut String) {
     loop {
         let lower = html.to_lowercase();
-        let Some(start) = lower.find("<script") else { break };
+        let Some(start) = lower.find("<script") else {
+            break;
+        };
         // Find matching </script>
         if let Some(rel_end) = lower[start..].find("</script>") {
             let end = start + rel_end + "</script>".len();
@@ -53,9 +55,13 @@ fn resolve_vault_assets(html: &mut String, ctx: &EditorCtx) {
     let prefix = "src=\"vault://";
     while let Some(start) = html.find(prefix) {
         let attr_start = start + "src=\"".len(); // start of vault://...
-        let Some(quote_end) = html[attr_start..].find('"') else { break };
+        let Some(quote_end) = html[attr_start..].find('"') else {
+            break;
+        };
         let vault_url = html[attr_start..attr_start + quote_end].to_string();
-        let Some(asset_id) = vault_url.strip_prefix("vault://") else { break };
+        let Some(asset_id) = vault_url.strip_prefix("vault://") else {
+            break;
+        };
 
         let data_url = resolve_single_asset(asset_id, ctx);
         let replacement = format!("src=\"{}\"", data_url);
@@ -90,10 +96,8 @@ fn resolve_single_asset(asset_id: &str, ctx: &EditorCtx) -> String {
 
     match crypto::decrypt_asset(&raw_data, cached_key) {
         Ok(decrypted) => {
-            let b64 = base64::Engine::encode(
-                &base64::engine::general_purpose::STANDARD,
-                &decrypted,
-            );
+            let b64 =
+                base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &decrypted);
             format!("data:{mime_type};base64,{b64}")
         }
         Err(_) => String::new(),
@@ -130,9 +134,13 @@ pub fn build_preview_html(markdown: &str, dark: bool) -> String {
     }
 
     let (bg, fg, code_bg, border, link_color, heading_color) = if dark {
-        ("#1e1e1e", "#d4d4d4", "#2a2a2a", "#3c3c3c", "#78aeed", "#e0e0e0")
+        (
+            "#1e1e1e", "#d4d4d4", "#2a2a2a", "#3c3c3c", "#78aeed", "#e0e0e0",
+        )
     } else {
-        ("#fafafa", "#2e2e2e", "#f0f0f0", "#d5d5d5", "#1c71d8", "#1e1e1e")
+        (
+            "#fafafa", "#2e2e2e", "#f0f0f0", "#d5d5d5", "#1c71d8", "#1e1e1e",
+        )
     };
 
     // Use a nonce-based CSP for mermaid scripts instead of 'unsafe-inline'.
@@ -154,7 +162,8 @@ pub fn build_preview_html(markdown: &str, dark: bool) -> String {
         String::new()
     };
 
-    format!(r#"<!DOCTYPE html>
+    format!(
+        r#"<!DOCTYPE html>
 <html>
 <head>
 <meta charset="utf-8">
@@ -196,56 +205,8 @@ input[type="checkbox"] {{ margin-right: 0.5em; }}
 {body}
 {mermaid_script}
 </body>
-</html>"#)
-}
-
-/// Build HTML suitable for PDF export with a professional print stylesheet.
-pub fn build_pdf_html(markdown: &str, title: &str) -> String {
-    let body = pithos_core::export::markdown_to_html(markdown);
-
-    let title_escaped = title.replace('<', "&lt;").replace('>', "&gt;");
-
-    format!(r#"<!DOCTYPE html>
-<html>
-<head>
-<meta charset="utf-8">
-<title>{title_escaped}</title>
-<style>
-@page {{
-    size: A4;
-    margin: 2cm 2.5cm;
-}}
-body {{
-    font-family: -apple-system, 'Cantarell', 'Segoe UI', sans-serif;
-    font-size: 11pt;
-    line-height: 1.6;
-    color: #1a1a1a;
-    max-width: 100%;
-    margin: 0;
-    padding: 0;
-}}
-h1, h2, h3, h4, h5, h6 {{ color: #111; margin-top: 1.4em; margin-bottom: 0.5em; page-break-after: avoid; }}
-h1 {{ font-size: 1.8em; border-bottom: 2px solid #333; padding-bottom: 0.3em; }}
-h2 {{ font-size: 1.4em; border-bottom: 1px solid #999; padding-bottom: 0.2em; }}
-h3 {{ font-size: 1.2em; }}
-code {{ background: #f0f0f0; padding: 2px 5px; border-radius: 3px; font-size: 0.9em; font-family: 'JetBrains Mono', 'Fira Code', monospace; }}
-pre {{ background: #f5f5f5; padding: 12px 16px; border-radius: 4px; overflow-x: auto; border: 1px solid #ddd; page-break-inside: avoid; }}
-pre code {{ background: none; padding: 0; }}
-blockquote {{ border-left: 3px solid #666; margin: 1em 0; padding: 0.5em 1em; color: #444; }}
-table {{ border-collapse: collapse; width: 100%; margin: 1em 0; page-break-inside: avoid; }}
-th, td {{ border: 1px solid #ccc; padding: 8px 12px; text-align: left; }}
-th {{ background: #f0f0f0; font-weight: 600; }}
-hr {{ border: none; border-top: 1px solid #999; margin: 2em 0; page-break-after: always; }}
-img {{ max-width: 100%; height: auto; }}
-ul, ol {{ padding-left: 1.5em; }}
-li {{ margin: 0.3em 0; }}
-input[type="checkbox"] {{ margin-right: 0.5em; }}
-</style>
-</head>
-<body>
-{body}
-</body>
-</html>"#)
+</html>"#
+    )
 }
 
 /// Scroll the preview WebView to match the editor scroll fraction.
@@ -254,5 +215,11 @@ pub fn sync_preview_scroll(ctx: &EditorCtx, fraction: f64) {
     let js = format!(
         "window.scrollTo(0, (document.body.scrollHeight - window.innerHeight) * {fraction});"
     );
-    ctx.preview_webview.evaluate_javascript(&js, None, None, None::<&gtk::gio::Cancellable>, |_| {});
+    ctx.preview_webview.evaluate_javascript(
+        &js,
+        None,
+        None,
+        None::<&gtk::gio::Cancellable>,
+        |_| {},
+    );
 }

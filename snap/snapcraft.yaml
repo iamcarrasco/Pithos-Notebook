@@ -1,5 +1,5 @@
 name: pithos-notebook
-version: '0.2.0'
+version: '0.2.5'
 summary: Private, encrypted markdown notebook
 description: |
   Pithos Notebook is an offline encrypted markdown notebook for Linux.
@@ -66,7 +66,15 @@ layout:
     bind: $SNAP/gnome-platform/usr/lib/x86_64-linux-gnu/libproxy
 
 parts:
+  typst:
+    plugin: nil
+    source: https://github.com/typst/typst/releases/download/v0.14.2/typst-x86_64-unknown-linux-musl.tar.xz
+    source-type: tar
+    override-build: |
+      install -Dm755 typst $CRAFT_PART_INSTALL/usr/bin/typst
+
   pithos-notebook:
+    after: [typst]
     plugin: rust
     source: .
     rust-channel: stable
@@ -82,6 +90,7 @@ parts:
       - libgtksourceview-5-0
       - libwebkitgtk-6.0-4
       - libjavascriptcoregtk-6.0-1
+      - pandoc
     prime:
       # Do not ship duplicate GTK/libadwaita runtime files: use gnome extension copies.
       - -usr/lib/*/libgtk-4.so*

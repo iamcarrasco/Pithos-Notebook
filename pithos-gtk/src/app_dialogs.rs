@@ -1,10 +1,17 @@
+use crate::*;
 use adw::prelude::*;
+use pithos_core::crypto;
+use pithos_core::state::*;
+use pithos_core::vault;
 use std::cell::RefCell;
 use std::rc::Rc;
-use pithos_core::state::*;
-use pithos_core::crypto;
-use pithos_core::vault;
-use crate::*;
+
+/// Save app config, logging failures to stderr (non-critical — just vault path persistence).
+fn save_config_or_log(config: &vault::AppConfig) {
+    if let Err(e) = vault::save_config(config) {
+        eprintln!("Failed to save config: {e}");
+    }
+}
 
 // ---------------------------------------------------------------------------
 // Vault startup dialogs
@@ -61,9 +68,7 @@ pub fn show_welcome_dialog(window: &adw::ApplicationWindow) {
     title.add_css_class("title-2");
     vbox.append(&title);
 
-    let subtitle = gtk::Label::new(Some(
-        "A private, offline, encrypted markdown notebook",
-    ));
+    let subtitle = gtk::Label::new(Some("A private, offline, encrypted markdown notebook"));
     subtitle.add_css_class("dim-label");
     subtitle.set_wrap(true);
     subtitle.set_justify(gtk::Justification::Center);
@@ -119,7 +124,7 @@ pub fn show_welcome_dialog(window: &adw::ApplicationWindow) {
                         if let Some(path) = file.path() {
                             let folder = path.to_string_lossy().to_string();
                             if vault::vault_file_path(&folder).exists() {
-                                let _ = vault::save_config(&vault::AppConfig {
+                                save_config_or_log(&vault::AppConfig {
                                     vault_path: Some(folder.clone()),
                                     ..Default::default()
                                 });
@@ -212,13 +217,25 @@ pub fn show_vault_switcher_dialog(ctx: &EditorCtx) {
 
     // Dismissing just closes the dialog — editor stays intact (no quit logic)
 
-    // Helper: save + teardown the current editor session
-    fn teardown(ctx: &EditorCtx) {
-        perform_vault_save_sync(ctx);
-        let _ = vault::save_config(&vault::AppConfig { vault_path: None, ..Default::default() });
+    // Helper: save + teardown the current editor session.
+    // Returns false when save fails so the caller can abort switching.
+    fn teardown(ctx: &EditorCtx) -> bool {
+        if !perform_vault_save_sync(ctx) {
+            return false;
+        }
+        save_config_or_log(&vault::AppConfig {
+            vault_path: None,
+            ..Default::default()
+        });
+        stop_background_tasks(ctx);
         *ctx.cached_key.borrow_mut() = None;
+        {
+            let mut state = ctx.state.borrow_mut();
+            state.suppress_sync = true;
+        }
         ctx.source_buffer.set_text("");
         ctx.window.set_content(gtk::Widget::NONE);
+        true
     }
 
     // Create New Vault
@@ -226,7 +243,9 @@ pub fn show_vault_switcher_dialog(ctx: &EditorCtx) {
         let ctx = ctx.clone();
         let dialog = dialog.clone();
         create_btn.connect_clicked(move |_| {
-            teardown(&ctx);
+            if !teardown(&ctx) {
+                return;
+            }
             transition_close(&dialog);
             show_create_vault_dialog(&ctx.window);
         });
@@ -250,8 +269,10 @@ pub fn show_vault_switcher_dialog(ctx: &EditorCtx) {
                         if let Some(path) = file.path() {
                             let folder = path.to_string_lossy().to_string();
                             if vault::vault_file_path(&folder).exists() {
-                                teardown(&ctx);
-                                let _ = vault::save_config(&vault::AppConfig {
+                                if !teardown(&ctx) {
+                                    return;
+                                }
+                                save_config_or_log(&vault::AppConfig {
                                     vault_path: Some(folder.clone()),
                                     ..Default::default()
                                 });
@@ -415,8 +436,10 @@ pub fn show_create_vault_dialog(window: &adw::ApplicationWindow) {
             let fl = folder_label.clone();
             let fp = folder_path.clone();
             let dlg = dialog_ref.clone();
-            chooser.select_folder(Some(&dlg), gtk::gio::Cancellable::NONE, move |result: Result<gtk::gio::File, gtk::glib::Error>| {
-                match result {
+            chooser.select_folder(
+                Some(&dlg),
+                gtk::gio::Cancellable::NONE,
+                move |result: Result<gtk::gio::File, gtk::glib::Error>| match result {
                     Ok(file) => {
                         if let Some(path) = file.path() {
                             let p = path.to_string_lossy().to_string();
@@ -429,8 +452,8 @@ pub fn show_create_vault_dialog(window: &adw::ApplicationWindow) {
                             eprintln!("Folder selection failed: {e}");
                         }
                     }
-                }
-            });
+                },
+            );
         });
     }
 
@@ -444,26 +467,39 @@ pub fn show_create_vault_dialog(window: &adw::ApplicationWindow) {
         let error_label = error_label.clone();
         let create_btn_inner = create_btn.clone();
         create_btn.connect_clicked(move |_| {
+            use zeroize::Zeroize;
             let create_btn = create_btn_inner.clone();
-            let p1 = pass1.text().to_string();
-            let p2 = pass2.text().to_string();
+            let mut p1 = pass1.text().to_string();
+            let mut p2 = pass2.text().to_string();
             let fp = folder_path.borrow().clone();
 
             if fp.is_none() {
+                p1.zeroize();
+                p2.zeroize();
                 error_label.set_label("Please select a folder");
                 error_label.set_visible(true);
                 return;
             }
             if p1.len() < 8 {
+                p1.zeroize();
+                p2.zeroize();
+                pass1.set_text("");
+                pass2.set_text("");
                 error_label.set_label("Passphrase must be at least 8 characters");
                 error_label.set_visible(true);
                 return;
             }
             if p1 != p2 {
+                p1.zeroize();
+                p2.zeroize();
+                pass1.set_text("");
+                pass2.set_text("");
                 error_label.set_label("Passphrases do not match");
                 error_label.set_visible(true);
                 return;
             }
+            p2.zeroize();
+            pass2.set_text("");
 
             let Some(vault_folder) = fp else {
                 error_label.set_label("Please select a folder");
@@ -473,7 +509,7 @@ pub fn show_create_vault_dialog(window: &adw::ApplicationWindow) {
 
             // If the selected folder already contains a vault, switch to unlock flow
             if vault::vault_file_path(&vault_folder).exists() {
-                let _ = vault::save_config(&vault::AppConfig {
+                save_config_or_log(&vault::AppConfig {
                     vault_path: Some(vault_folder.clone()),
                     ..Default::default()
                 });
@@ -506,13 +542,16 @@ pub fn show_create_vault_dialog(window: &adw::ApplicationWindow) {
                 let cached_key = crypto::CachedKey::derive(&p1);
                 match crypto::encrypt_vault_fast(&json, &cached_key) {
                     Ok(encrypted) => {
-                        if let Err(e) = vault::write_vault_raw(&vault_folder_for_thread, &encrypted) {
+                        if let Err(e) = vault::write_vault_raw(&vault_folder_for_thread, &encrypted)
+                        {
                             let _ = tx.send(Err(format!("Write failed: {e}")));
                         } else {
                             let _ = tx.send(Ok(cached_key));
                         }
                     }
-                    Err(e) => { let _ = tx.send(Err(format!("Encryption failed: {e}"))); }
+                    Err(e) => {
+                        let _ = tx.send(Err(format!("Encryption failed: {e}")));
+                    }
                 }
             });
 
@@ -524,12 +563,14 @@ pub fn show_create_vault_dialog(window: &adw::ApplicationWindow) {
             glib::timeout_add_local(std::time::Duration::from_millis(50), move || {
                 let result = match rx.try_recv() {
                     Ok(r) => r,
-                    Err(std::sync::mpsc::TryRecvError::Empty) => return glib::ControlFlow::Continue,
+                    Err(std::sync::mpsc::TryRecvError::Empty) => {
+                        return glib::ControlFlow::Continue
+                    }
                     Err(_) => return glib::ControlFlow::Break,
                 };
                 match result {
                     Ok(cached_key) => {
-                        let _ = vault::save_config(&vault::AppConfig {
+                        save_config_or_log(&vault::AppConfig {
                             vault_path: Some(vault_folder_c.clone()),
                             ..Default::default()
                         });
@@ -540,7 +581,12 @@ pub fn show_create_vault_dialog(window: &adw::ApplicationWindow) {
                         glib::timeout_add_local_once(
                             std::time::Duration::from_millis(50),
                             move || {
-                                build_editor(&window, DocState::default(), vault_folder_c, cached_key);
+                                build_editor(
+                                    &window,
+                                    DocState::default(),
+                                    vault_folder_c,
+                                    cached_key,
+                                );
                             },
                         );
                     }
@@ -624,6 +670,7 @@ pub fn show_unlock_vault_dialog(window: &adw::ApplicationWindow, vault_folder: S
         let unlock_btn_for_connect = unlock_btn.clone();
         let do_unlock = move || {
             let passphrase = pass_entry.text().to_string();
+            pass_entry.set_text(""); // clear passphrase from UI immediately
             if passphrase.is_empty() {
                 error_label.set_label("Please enter your passphrase");
                 error_label.set_visible(true);
@@ -639,7 +686,8 @@ pub fn show_unlock_vault_dialog(window: &adw::ApplicationWindow, vault_folder: S
             error_label.remove_css_class("error");
             error_label.set_visible(true);
 
-            let (tx, rx) = std::sync::mpsc::channel::<Result<(String, crypto::CachedKey), String>>();
+            let (tx, rx) =
+                std::sync::mpsc::channel::<Result<(String, crypto::CachedKey), String>>();
             std::thread::spawn(move || {
                 let raw = match vault::read_vault_raw(&vault_folder_thread) {
                     Ok(Some(data)) => data,
@@ -672,7 +720,9 @@ pub fn show_unlock_vault_dialog(window: &adw::ApplicationWindow, vault_folder: S
             glib::timeout_add_local(std::time::Duration::from_millis(50), move || {
                 let result = match rx.try_recv() {
                     Ok(r) => r,
-                    Err(std::sync::mpsc::TryRecvError::Empty) => return glib::ControlFlow::Continue,
+                    Err(std::sync::mpsc::TryRecvError::Empty) => {
+                        return glib::ControlFlow::Continue
+                    }
                     Err(_) => return glib::ControlFlow::Break,
                 };
                 match result {
@@ -731,7 +781,10 @@ pub fn show_unlock_vault_dialog(window: &adw::ApplicationWindow, vault_folder: S
         let window = window.clone();
         let dialog = dialog.clone();
         change_btn.connect_clicked(move |_| {
-            let _ = vault::save_config(&vault::AppConfig { vault_path: None, ..Default::default() });
+            save_config_or_log(&vault::AppConfig {
+                vault_path: None,
+                ..Default::default()
+            });
             transition_close(&dialog);
             show_welcome_dialog(&window);
         });
@@ -753,61 +806,271 @@ pub struct CommandEntry {
 
 pub fn build_command_entries() -> Vec<CommandEntry> {
     vec![
-        CommandEntry { label: "New Note".into(), accel: "Ctrl+N".into(), action_name: "win.new-note".into() },
-        CommandEntry { label: "Save".into(), accel: "Ctrl+S".into(), action_name: "win.save-vault".into() },
-        CommandEntry { label: "Save As\u{2026}".into(), accel: "Ctrl+Shift+S".into(), action_name: "win.save-as".into() },
-        CommandEntry { label: "Import File\u{2026}".into(), accel: "Ctrl+O".into(), action_name: "win.import-file".into() },
-        CommandEntry { label: "Rename Note".into(), accel: "F2".into(), action_name: "win.rename-note".into() },
-        CommandEntry { label: "Delete Note".into(), accel: "".into(), action_name: "win.delete-note".into() },
-        CommandEntry { label: "Close Tab".into(), accel: "Ctrl+W".into(), action_name: "win.close-tab".into() },
-        CommandEntry { label: "Undo".into(), accel: "Ctrl+Z".into(), action_name: "win.undo".into() },
-        CommandEntry { label: "Redo".into(), accel: "Ctrl+Shift+Z".into(), action_name: "win.redo".into() },
-        CommandEntry { label: "Toggle Sidebar".into(), accel: "Ctrl+\\".into(), action_name: "win.toggle-sidebar".into() },
-        CommandEntry { label: "Zen Mode".into(), accel: "Ctrl+Shift+J".into(), action_name: "win.zen-mode".into() },
-        CommandEntry { label: "Fullscreen".into(), accel: "F11".into(), action_name: "win.fullscreen".into() },
-        CommandEntry { label: "Toggle Theme".into(), accel: "Ctrl+Shift+D".into(), action_name: "win.toggle-theme".into() },
-        CommandEntry { label: "Focus Search".into(), accel: "Ctrl+Shift+F".into(), action_name: "win.focus-search".into() },
-        CommandEntry { label: "Daily Note".into(), accel: "Ctrl+Shift+T".into(), action_name: "win.daily-note".into() },
-        CommandEntry { label: "New Folder".into(), accel: "".into(), action_name: "win.new-folder".into() },
-        CommandEntry { label: "New from Template\u{2026}".into(), accel: "".into(), action_name: "win.new-from-template".into() },
-        CommandEntry { label: "View Trash".into(), accel: "".into(), action_name: "win.view-trash".into() },
-        CommandEntry { label: "Save Snapshot".into(), accel: "".into(), action_name: "win.save-snapshot".into() },
-        CommandEntry { label: "Version History".into(), accel: "".into(), action_name: "win.version-history".into() },
-        CommandEntry { label: "Move to Folder\u{2026}".into(), accel: "".into(), action_name: "win.move-to-folder".into() },
-        CommandEntry { label: "Export as Markdown\u{2026}".into(), accel: "".into(), action_name: "win.export-markdown".into() },
-        CommandEntry { label: "Export as HTML\u{2026}".into(), accel: "".into(), action_name: "win.export-html".into() },
-        CommandEntry { label: "Export as PDF\u{2026}".into(), accel: "".into(), action_name: "win.export-pdf".into() },
-        CommandEntry { label: "Bold".into(), accel: "Ctrl+B".into(), action_name: "win.fmt-bold".into() },
-        CommandEntry { label: "Italic".into(), accel: "Ctrl+I".into(), action_name: "win.fmt-italic".into() },
-        CommandEntry { label: "Underline".into(), accel: "Ctrl+U".into(), action_name: "win.fmt-underline".into() },
-        CommandEntry { label: "Strikethrough".into(), accel: "Ctrl+D".into(), action_name: "win.fmt-strike".into() },
-        CommandEntry { label: "Inline Code".into(), accel: "Ctrl+E".into(), action_name: "win.fmt-code".into() },
-        CommandEntry { label: "Insert Link".into(), accel: "Ctrl+K".into(), action_name: "win.fmt-link".into() },
-        CommandEntry { label: "Heading 1".into(), accel: "Ctrl+1".into(), action_name: "win.fmt-h1".into() },
-        CommandEntry { label: "Heading 2".into(), accel: "Ctrl+2".into(), action_name: "win.fmt-h2".into() },
-        CommandEntry { label: "Heading 3".into(), accel: "Ctrl+3".into(), action_name: "win.fmt-h3".into() },
-        CommandEntry { label: "Heading 4".into(), accel: "Ctrl+4".into(), action_name: "win.fmt-h4".into() },
-        CommandEntry { label: "Heading 5".into(), accel: "Ctrl+5".into(), action_name: "win.fmt-h5".into() },
-        CommandEntry { label: "Heading 6".into(), accel: "Ctrl+6".into(), action_name: "win.fmt-h6".into() },
-        CommandEntry { label: "Block Quote".into(), accel: "Ctrl+Shift+Q".into(), action_name: "win.fmt-quote".into() },
-        CommandEntry { label: "Bullet List".into(), accel: "Ctrl+Shift+L".into(), action_name: "win.fmt-bullet-list".into() },
-        CommandEntry { label: "Ordered List".into(), accel: "".into(), action_name: "win.fmt-ordered-list".into() },
-        CommandEntry { label: "Task List".into(), accel: "".into(), action_name: "win.fmt-task-list".into() },
-        CommandEntry { label: "Toggle Checkbox".into(), accel: "Ctrl+Space".into(), action_name: "win.toggle-checkbox".into() },
-        CommandEntry { label: "Change Passphrase\u{2026}".into(), accel: "".into(), action_name: "win.change-passphrase".into() },
-        CommandEntry { label: "Find\u{2026}".into(), accel: "Ctrl+F".into(), action_name: "win.find-in-editor".into() },
-        CommandEntry { label: "Find and Replace\u{2026}".into(), accel: "Ctrl+H".into(), action_name: "win.find-replace".into() },
-        CommandEntry { label: "Find Next".into(), accel: "".into(), action_name: "win.find-next".into() },
-        CommandEntry { label: "Find Previous".into(), accel: "".into(), action_name: "win.find-prev".into() },
-        CommandEntry { label: "Table: Add Row".into(), accel: "".into(), action_name: "win.table-add-row".into() },
-        CommandEntry { label: "Table: Add Column".into(), accel: "".into(), action_name: "win.table-add-column".into() },
-        CommandEntry { label: "Table: Align".into(), accel: "".into(), action_name: "win.table-align".into() },
-        CommandEntry { label: "Toggle Spellcheck".into(), accel: "".into(), action_name: "win.toggle-spellcheck".into() },
-        CommandEntry { label: "Open Vault\u{2026}".into(), accel: "".into(), action_name: "win.open-vault".into() },
-        CommandEntry { label: "New Vault\u{2026}".into(), accel: "".into(), action_name: "win.new-vault".into() },
-        CommandEntry { label: "Lock Vault".into(), accel: "".into(), action_name: "win.lock-vault".into() },
-        CommandEntry { label: "Help".into(), accel: "F1".into(), action_name: "win.show-help".into() },
-        CommandEntry { label: "Settings".into(), accel: "".into(), action_name: "win.show-settings".into() },
+        CommandEntry {
+            label: "New Note".into(),
+            accel: "Ctrl+N".into(),
+            action_name: "win.new-note".into(),
+        },
+        CommandEntry {
+            label: "Save".into(),
+            accel: "Ctrl+S".into(),
+            action_name: "win.save-vault".into(),
+        },
+        CommandEntry {
+            label: "Save As\u{2026}".into(),
+            accel: "Ctrl+Shift+S".into(),
+            action_name: "win.save-as".into(),
+        },
+        CommandEntry {
+            label: "Import File\u{2026}".into(),
+            accel: "Ctrl+O".into(),
+            action_name: "win.import-file".into(),
+        },
+        CommandEntry {
+            label: "Rename Note".into(),
+            accel: "F2".into(),
+            action_name: "win.rename-note".into(),
+        },
+        CommandEntry {
+            label: "Delete Note".into(),
+            accel: "".into(),
+            action_name: "win.delete-note".into(),
+        },
+        CommandEntry {
+            label: "Close Tab".into(),
+            accel: "Ctrl+W".into(),
+            action_name: "win.close-tab".into(),
+        },
+        CommandEntry {
+            label: "Undo".into(),
+            accel: "Ctrl+Z".into(),
+            action_name: "win.undo".into(),
+        },
+        CommandEntry {
+            label: "Redo".into(),
+            accel: "Ctrl+Shift+Z".into(),
+            action_name: "win.redo".into(),
+        },
+        CommandEntry {
+            label: "Toggle Sidebar".into(),
+            accel: "Ctrl+\\".into(),
+            action_name: "win.toggle-sidebar".into(),
+        },
+        CommandEntry {
+            label: "Zen Mode".into(),
+            accel: "Ctrl+Shift+J".into(),
+            action_name: "win.zen-mode".into(),
+        },
+        CommandEntry {
+            label: "Fullscreen".into(),
+            accel: "F11".into(),
+            action_name: "win.fullscreen".into(),
+        },
+        CommandEntry {
+            label: "Toggle Theme".into(),
+            accel: "Ctrl+Shift+D".into(),
+            action_name: "win.toggle-theme".into(),
+        },
+        CommandEntry {
+            label: "Focus Search".into(),
+            accel: "Ctrl+Shift+F".into(),
+            action_name: "win.focus-search".into(),
+        },
+        CommandEntry {
+            label: "Daily Note".into(),
+            accel: "Ctrl+Shift+T".into(),
+            action_name: "win.daily-note".into(),
+        },
+        CommandEntry {
+            label: "New Folder".into(),
+            accel: "".into(),
+            action_name: "win.new-folder".into(),
+        },
+        CommandEntry {
+            label: "New from Template\u{2026}".into(),
+            accel: "".into(),
+            action_name: "win.new-from-template".into(),
+        },
+        CommandEntry {
+            label: "View Trash".into(),
+            accel: "".into(),
+            action_name: "win.view-trash".into(),
+        },
+        CommandEntry {
+            label: "Save Snapshot".into(),
+            accel: "".into(),
+            action_name: "win.save-snapshot".into(),
+        },
+        CommandEntry {
+            label: "Version History".into(),
+            accel: "".into(),
+            action_name: "win.version-history".into(),
+        },
+        CommandEntry {
+            label: "Move to Folder\u{2026}".into(),
+            accel: "".into(),
+            action_name: "win.move-to-folder".into(),
+        },
+        CommandEntry {
+            label: "Export\u{2026}".into(),
+            accel: "Ctrl+Shift+E".into(),
+            action_name: "win.export".into(),
+        },
+        CommandEntry {
+            label: "Bold".into(),
+            accel: "Ctrl+B".into(),
+            action_name: "win.fmt-bold".into(),
+        },
+        CommandEntry {
+            label: "Italic".into(),
+            accel: "Ctrl+I".into(),
+            action_name: "win.fmt-italic".into(),
+        },
+        CommandEntry {
+            label: "Underline".into(),
+            accel: "Ctrl+U".into(),
+            action_name: "win.fmt-underline".into(),
+        },
+        CommandEntry {
+            label: "Strikethrough".into(),
+            accel: "Ctrl+D".into(),
+            action_name: "win.fmt-strike".into(),
+        },
+        CommandEntry {
+            label: "Inline Code".into(),
+            accel: "Ctrl+E".into(),
+            action_name: "win.fmt-code".into(),
+        },
+        CommandEntry {
+            label: "Insert Link".into(),
+            accel: "Ctrl+K".into(),
+            action_name: "win.fmt-link".into(),
+        },
+        CommandEntry {
+            label: "Heading 1".into(),
+            accel: "Ctrl+1".into(),
+            action_name: "win.fmt-h1".into(),
+        },
+        CommandEntry {
+            label: "Heading 2".into(),
+            accel: "Ctrl+2".into(),
+            action_name: "win.fmt-h2".into(),
+        },
+        CommandEntry {
+            label: "Heading 3".into(),
+            accel: "Ctrl+3".into(),
+            action_name: "win.fmt-h3".into(),
+        },
+        CommandEntry {
+            label: "Heading 4".into(),
+            accel: "Ctrl+4".into(),
+            action_name: "win.fmt-h4".into(),
+        },
+        CommandEntry {
+            label: "Heading 5".into(),
+            accel: "Ctrl+5".into(),
+            action_name: "win.fmt-h5".into(),
+        },
+        CommandEntry {
+            label: "Heading 6".into(),
+            accel: "Ctrl+6".into(),
+            action_name: "win.fmt-h6".into(),
+        },
+        CommandEntry {
+            label: "Block Quote".into(),
+            accel: "Ctrl+Shift+Q".into(),
+            action_name: "win.fmt-quote".into(),
+        },
+        CommandEntry {
+            label: "Bullet List".into(),
+            accel: "Ctrl+Shift+L".into(),
+            action_name: "win.fmt-bullet-list".into(),
+        },
+        CommandEntry {
+            label: "Ordered List".into(),
+            accel: "".into(),
+            action_name: "win.fmt-ordered-list".into(),
+        },
+        CommandEntry {
+            label: "Task List".into(),
+            accel: "".into(),
+            action_name: "win.fmt-task-list".into(),
+        },
+        CommandEntry {
+            label: "Toggle Checkbox".into(),
+            accel: "Ctrl+Space".into(),
+            action_name: "win.toggle-checkbox".into(),
+        },
+        CommandEntry {
+            label: "Change Passphrase\u{2026}".into(),
+            accel: "".into(),
+            action_name: "win.change-passphrase".into(),
+        },
+        CommandEntry {
+            label: "Find\u{2026}".into(),
+            accel: "Ctrl+F".into(),
+            action_name: "win.find-in-editor".into(),
+        },
+        CommandEntry {
+            label: "Find and Replace\u{2026}".into(),
+            accel: "Ctrl+H".into(),
+            action_name: "win.find-replace".into(),
+        },
+        CommandEntry {
+            label: "Find Next".into(),
+            accel: "".into(),
+            action_name: "win.find-next".into(),
+        },
+        CommandEntry {
+            label: "Find Previous".into(),
+            accel: "".into(),
+            action_name: "win.find-prev".into(),
+        },
+        CommandEntry {
+            label: "Table: Add Row".into(),
+            accel: "".into(),
+            action_name: "win.table-add-row".into(),
+        },
+        CommandEntry {
+            label: "Table: Add Column".into(),
+            accel: "".into(),
+            action_name: "win.table-add-column".into(),
+        },
+        CommandEntry {
+            label: "Table: Align".into(),
+            accel: "".into(),
+            action_name: "win.table-align".into(),
+        },
+        CommandEntry {
+            label: "Toggle Spellcheck".into(),
+            accel: "".into(),
+            action_name: "win.toggle-spellcheck".into(),
+        },
+        CommandEntry {
+            label: "Open Vault\u{2026}".into(),
+            accel: "".into(),
+            action_name: "win.open-vault".into(),
+        },
+        CommandEntry {
+            label: "New Vault\u{2026}".into(),
+            accel: "".into(),
+            action_name: "win.new-vault".into(),
+        },
+        CommandEntry {
+            label: "Lock Vault".into(),
+            accel: "".into(),
+            action_name: "win.lock-vault".into(),
+        },
+        CommandEntry {
+            label: "Help".into(),
+            accel: "F1".into(),
+            action_name: "win.show-help".into(),
+        },
+        CommandEntry {
+            label: "Settings".into(),
+            accel: "".into(),
+            action_name: "win.show-settings".into(),
+        },
     ]
 }
 
@@ -945,40 +1208,38 @@ pub fn show_command_palette(ctx: &EditorCtx) {
     {
         let list_ref = list_box.clone();
         let key_ctl = gtk::EventControllerKey::new();
-        key_ctl.connect_key_pressed(move |_, key, _, _| {
-            match key {
-                gdk::Key::Down => {
-                    if let Some(row) = list_ref.selected_row() {
-                        let idx = row.index();
-                        let mut next = idx + 1;
-                        while let Some(r) = list_ref.row_at_index(next) {
+        key_ctl.connect_key_pressed(move |_, key, _, _| match key {
+            gdk::Key::Down => {
+                if let Some(row) = list_ref.selected_row() {
+                    let idx = row.index();
+                    let mut next = idx + 1;
+                    while let Some(r) = list_ref.row_at_index(next) {
+                        if r.is_visible() {
+                            list_ref.select_row(Some(&r));
+                            break;
+                        }
+                        next += 1;
+                    }
+                }
+                glib::Propagation::Stop
+            }
+            gdk::Key::Up => {
+                if let Some(row) = list_ref.selected_row() {
+                    let idx = row.index();
+                    let mut prev = idx - 1;
+                    while prev >= 0 {
+                        if let Some(r) = list_ref.row_at_index(prev) {
                             if r.is_visible() {
                                 list_ref.select_row(Some(&r));
                                 break;
                             }
-                            next += 1;
                         }
+                        prev -= 1;
                     }
-                    glib::Propagation::Stop
                 }
-                gdk::Key::Up => {
-                    if let Some(row) = list_ref.selected_row() {
-                        let idx = row.index();
-                        let mut prev = idx - 1;
-                        while prev >= 0 {
-                            if let Some(r) = list_ref.row_at_index(prev) {
-                                if r.is_visible() {
-                                    list_ref.select_row(Some(&r));
-                                    break;
-                                }
-                            }
-                            prev -= 1;
-                        }
-                    }
-                    glib::Propagation::Stop
-                }
-                _ => glib::Propagation::Proceed,
+                glib::Propagation::Stop
             }
+            _ => glib::Propagation::Proceed,
         });
         search_entry.add_controller(key_ctl);
     }
@@ -1082,10 +1343,7 @@ pub fn rename_note_dialog(ctx: &EditorCtx) {
             .unwrap_or_else(|| "Untitled".to_string())
     };
 
-    let dialog = adw::AlertDialog::new(
-        Some("Rename Note"),
-        Some("Enter a new name for this note"),
-    );
+    let dialog = adw::AlertDialog::new(Some("Rename Note"), Some("Enter a new name for this note"));
 
     let entry = gtk::Entry::new();
     entry.set_text(&current_name);
@@ -1103,38 +1361,35 @@ pub fn rename_note_dialog(ctx: &EditorCtx) {
     dialog.connect_response(None, move |dlg, response| {
         let new_name = entry.text().trim().to_string();
         dlg.set_extra_child(gtk::Widget::NONE);
-        if response == "rename"
-            && !new_name.is_empty() {
-                let conflict = {
-                    let state = ctx.state.borrow();
-                    let active = &state.active_note_id;
-                    find_note_index(&state.notes, active).is_some_and(|i| {
-                        note_name_exists(
-                            &state.notes,
-                            &new_name,
-                            &state.notes[i].parent_id,
-                            Some(active),
-                        )
-                    })
-                };
-                if conflict {
-                    send_toast(&ctx, "A note with that name already exists in this folder");
-                    return;
-                }
-                {
-                    let mut state = ctx.state.borrow_mut();
-                    if let Some(index) =
-                        find_note_index(&state.notes, &state.active_note_id)
-                    {
-                        state.notes[index].name = new_name;
-                        state.notes[index].updated_at = unix_now();
-                    }
-                }
-                refresh_header(&ctx);
-                refresh_tabs(&ctx);
-                refresh_note_list(&ctx);
-                trigger_vault_save(&ctx);
+        if response == "rename" && !new_name.is_empty() {
+            let conflict = {
+                let state = ctx.state.borrow();
+                let active = &state.active_note_id;
+                find_note_index(&state.notes, active).is_some_and(|i| {
+                    note_name_exists(
+                        &state.notes,
+                        &new_name,
+                        &state.notes[i].parent_id,
+                        Some(active),
+                    )
+                })
+            };
+            if conflict {
+                send_toast(&ctx, "A note with that name already exists in this folder");
+                return;
             }
+            {
+                let mut state = ctx.state.borrow_mut();
+                if let Some(index) = find_note_index(&state.notes, &state.active_note_id) {
+                    state.notes[index].name = new_name;
+                    state.notes[index].updated_at = unix_now();
+                }
+            }
+            refresh_header(&ctx);
+            refresh_tabs(&ctx);
+            refresh_note_list(&ctx);
+            trigger_vault_save(&ctx);
+        }
     });
     dialog.present(Some(&window));
 }
@@ -1162,9 +1417,7 @@ pub fn show_change_passphrase_dialog(ctx: &EditorCtx) {
     title.add_css_class("title-2");
     vbox.append(&title);
 
-    let subtitle = gtk::Label::new(Some(
-        "Enter your current passphrase, then choose a new one",
-    ));
+    let subtitle = gtk::Label::new(Some("Enter your current passphrase, then choose a new one"));
     subtitle.add_css_class("dim-label");
     subtitle.set_wrap(true);
     vbox.append(&subtitle);
@@ -1289,6 +1542,16 @@ pub fn show_change_passphrase_dialog(ctx: &EditorCtx) {
             error_label.remove_css_class("error");
             error_label.set_visible(true);
 
+            // Refuse to start if an async save is already in flight — its thread
+            // could write with the old key after we've re-encrypted.
+            if ctx.saving.get() {
+                error_label.add_css_class("error");
+                error_label.set_label("A save is in progress — please try again in a moment");
+                error_label.set_visible(true);
+                change_btn.set_sensitive(true);
+                return;
+            }
+
             // Cancel any pending autosave and block new ones during re-encryption.
             if let Some(source_id) = ctx.save_timeout_id.take() {
                 source_id.remove();
@@ -1336,15 +1599,18 @@ pub fn show_change_passphrase_dialog(ctx: &EditorCtx) {
                         reencrypted_assets.push((asset_id.clone(), encrypted_str.into_bytes()));
                     }
 
-                    // 5) All assets re-encrypted — commit to disk.
+                    // 5) Write new vault FIRST — if this fails, no assets
+                    //    have been touched and everything stays on the old key.
+                    vault::write_vault_raw(&vault_folder_t, &reencrypted)
+                        .map_err(|e| format!("Write failed: {e}"))?;
+
+                    // 6) Commit re-encrypted assets to disk.
+                    //    The vault is already on the new key, so if an asset
+                    //    write fails the user can retry with the new passphrase.
                     for (asset_id, data) in &reencrypted_assets {
                         vault::write_asset(&vault_folder_t, asset_id, data)
                             .map_err(|e| format!("Failed to write asset {asset_id}: {e}"))?;
                     }
-
-                    // 6) Write new vault
-                    vault::write_vault_raw(&vault_folder_t, &reencrypted)
-                        .map_err(|e| format!("Write failed: {e}"))?;
 
                     Ok(new_key)
                 })();
@@ -1363,7 +1629,9 @@ pub fn show_change_passphrase_dialog(ctx: &EditorCtx) {
             glib::timeout_add_local(std::time::Duration::from_millis(50), move || {
                 let result = match rx.try_recv() {
                     Ok(r) => r,
-                    Err(std::sync::mpsc::TryRecvError::Empty) => return glib::ControlFlow::Continue,
+                    Err(std::sync::mpsc::TryRecvError::Empty) => {
+                        return glib::ControlFlow::Continue
+                    }
                     Err(_) => return glib::ControlFlow::Break,
                 };
                 // Re-enable autosave now that re-encryption is done.
@@ -1407,18 +1675,28 @@ pub fn show_open_vault_dialog(ctx: &EditorCtx) {
                     let folder = path.to_string_lossy().to_string();
                     if vault::vault_file_path(&folder).exists() {
                         // Save current vault, lock, switch
-                        perform_vault_save_sync(&ctx);
+                        if !perform_vault_save_sync(&ctx) {
+                            return;
+                        }
+                        stop_background_tasks(&ctx);
                         *ctx.cached_key.borrow_mut() = None;
+                        {
+                            let mut state = ctx.state.borrow_mut();
+                            state.suppress_sync = true;
+                        }
                         ctx.source_buffer.set_text("");
-                        let _ = vault::save_config(&vault::AppConfig {
+                        save_config_or_log(&vault::AppConfig {
                             vault_path: Some(folder.clone()),
                             ..Default::default()
                         });
                         ctx.window.set_content(gtk::Widget::NONE);
                         show_unlock_vault_dialog(&ctx.window, folder);
                     } else {
-                        show_error(&ctx.window, "No Vault Found",
-                            "The selected folder does not contain a vault file");
+                        show_error(
+                            &ctx.window,
+                            "No Vault Found",
+                            "The selected folder does not contain a vault file",
+                        );
                     }
                 }
             }
@@ -1432,93 +1710,21 @@ pub fn show_open_vault_dialog(ctx: &EditorCtx) {
 }
 
 pub fn show_new_vault_dialog(ctx: &EditorCtx) {
-    perform_vault_save_sync(ctx);
+    if !perform_vault_save_sync(ctx) {
+        return;
+    }
+    stop_background_tasks(ctx);
     *ctx.cached_key.borrow_mut() = None;
+    {
+        let mut state = ctx.state.borrow_mut();
+        state.suppress_sync = true;
+    }
     ctx.source_buffer.set_text("");
     ctx.window.set_content(gtk::Widget::NONE);
     show_create_vault_dialog(&ctx.window);
 }
 
 // ---------------------------------------------------------------------------
-// PDF export
-// ---------------------------------------------------------------------------
-
-pub fn export_as_pdf(ctx: &EditorCtx) {
-    use webkit6::prelude::WebViewExt;
-
-    let markdown = current_markdown(ctx);
-    let note_name = {
-        let state = ctx.state.borrow();
-        find_note_index(&state.notes, &state.active_note_id)
-            .map(|i| state.notes[i].name.clone())
-            .unwrap_or_else(|| "Untitled".to_string())
-    };
-
-    let html = build_pdf_html(&markdown, &note_name);
-
-    // Create a hidden WebView to render and print to PDF
-    let print_webview = webkit6::WebView::builder()
-        .network_session(&webkit6::NetworkSession::new_ephemeral())
-        .build();
-
-    let dialog = gtk::FileDialog::builder()
-        .title("Export as PDF")
-        .accept_label("Export")
-        .build();
-
-    let suggested = format!("{}.pdf", note_name);
-    dialog.set_initial_name(Some(&suggested));
-
-    let filter = gtk::FileFilter::new();
-    filter.set_name(Some("PDF files"));
-    filter.add_pattern("*.pdf");
-    let filters = gtk::gio::ListStore::new::<gtk::FileFilter>();
-    filters.append(&filter);
-    dialog.set_filters(Some(&filters));
-
-    let ctx = ctx.clone();
-    let window = ctx.window.clone();
-    dialog.save(Some(&window), gtk::gio::Cancellable::NONE, move |result| {
-        match result {
-            Ok(file) => {
-                if let Some(mut path) = file.path() {
-                    if path.extension().is_none() {
-                        path.set_extension("pdf");
-                    }
-                    // Load HTML into print webview
-                    print_webview.load_html(&html, None);
-
-                    // Wait for load, then print to file
-                    let path_str = path.to_string_lossy().to_string();
-                    let ctx2 = ctx.clone();
-                    print_webview.connect_load_changed(move |wv, event| {
-                        if event == webkit6::LoadEvent::Finished {
-                            let print_op = webkit6::PrintOperation::new(wv);
-                            let page_setup = gtk::PageSetup::new();
-                            page_setup.set_paper_size(&gtk::PaperSize::new(Some(gtk::PAPER_NAME_A4)));
-                            print_op.set_page_setup(&page_setup);
-                            let ctx3 = ctx2.clone();
-                            let path_str2 = path_str.clone();
-                            // Export to file
-                            let settings = gtk::PrintSettings::new();
-                            settings.set(gtk::PRINT_SETTINGS_OUTPUT_URI,
-                                Some(&format!("file://{}", path_str2)));
-                            print_op.set_print_settings(&settings);
-
-                            print_op.print();
-                            send_toast(&ctx3, "Exported as PDF");
-                        }
-                    });
-                }
-            }
-            Err(e) => {
-                if !e.matches(gtk::DialogError::Dismissed) {
-                    send_toast(&ctx, &format!("Could not open export dialog: {e}"));
-                }
-            }
-        }
-    });
-}
 
 // ---------------------------------------------------------------------------
 // Settings dialog
@@ -1548,7 +1754,8 @@ pub fn show_settings_dialog(ctx: &EditorCtx) {
     section_title.set_xalign(0.0);
     content.append(&section_title);
 
-    let section_desc = gtk::Label::new(Some("Choose which templates appear in the template picker"));
+    let section_desc =
+        gtk::Label::new(Some("Choose which templates appear in the template picker"));
     section_desc.add_css_class("dim-label");
     section_desc.set_xalign(0.0);
     section_desc.set_wrap(true);
@@ -1570,7 +1777,7 @@ pub fn show_settings_dialog(ctx: &EditorCtx) {
     for (name, _body, tags_csv) in builtin_templates() {
         let row = adw::SwitchRow::builder()
             .title(&name)
-            .subtitle(&tags_csv.replace(',', ", "))
+            .subtitle(tags_csv.replace(',', ", "))
             .active(!disabled.contains(&name))
             .build();
         {
@@ -1615,7 +1822,7 @@ pub fn show_settings_dialog(ctx: &EditorCtx) {
         for (i, (name, _body, tags_csv)) in custom_templates.iter().enumerate() {
             let row = adw::ActionRow::builder()
                 .title(name)
-                .subtitle(&tags_csv.replace(',', ", "))
+                .subtitle(tags_csv.replace(',', ", "))
                 .build();
 
             let btn_box = gtk::Box::new(gtk::Orientation::Horizontal, 4);
@@ -1668,7 +1875,10 @@ pub fn show_settings_dialog(ctx: &EditorCtx) {
                     // Delete immediately; offer undo via toast (HIG: prefer undo over confirm)
                     let deleted = {
                         let mut state = ctx.state.borrow_mut();
-                        let pos = state.custom_templates.iter().position(|(n, _, _)| n == &name);
+                        let pos = state
+                            .custom_templates
+                            .iter()
+                            .position(|(n, _, _)| n == &name);
                         if let Some(idx) = pos {
                             let removed = state.custom_templates.remove(idx);
                             state.disabled_templates.retain(|n| n != &name);
@@ -1757,7 +1967,11 @@ fn show_template_editor_dialog(ctx: &EditorCtx, edit_index: Option<usize>) {
     let dialog = adw::Window::builder()
         .transient_for(&ctx.window)
         .modal(true)
-        .title(if is_edit { "Edit Template" } else { "New Template" })
+        .title(if is_edit {
+            "Edit Template"
+        } else {
+            "New Template"
+        })
         .default_width(480)
         .default_height(520)
         .build();
@@ -1844,13 +2058,17 @@ fn show_template_editor_dialog(ctx: &EditorCtx, edit_index: Option<usize>) {
 
             let tags = tags_entry.text().trim().to_string();
             let buf = text_view.buffer();
-            let content_text = buf.text(&buf.start_iter(), &buf.end_iter(), false).to_string();
+            let content_text = buf
+                .text(&buf.start_iter(), &buf.end_iter(), false)
+                .to_string();
 
             {
                 let mut state = ctx.state.borrow_mut();
-                let dup = state.custom_templates.iter().enumerate().any(|(j, (n, _, _))| {
-                    n == &name && edit_index != Some(j)
-                });
+                let dup = state
+                    .custom_templates
+                    .iter()
+                    .enumerate()
+                    .any(|(j, (n, _, _))| n == &name && edit_index != Some(j));
                 if dup {
                     drop(state);
                     error_label.set_label("A custom template with that name already exists");

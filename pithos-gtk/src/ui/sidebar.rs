@@ -2,7 +2,14 @@ use adw::prelude::*;
 
 use crate::*; // For everything left in main.rs temporarily
 
-pub fn build_sidebar() -> (adw::ToolbarView, adw::HeaderBar, gtk::SearchBar, gtk::SearchEntry, gtk::ListBox, gtk::Box) {
+pub fn build_sidebar() -> (
+    adw::ToolbarView,
+    adw::HeaderBar,
+    gtk::SearchBar,
+    gtk::SearchEntry,
+    gtk::ListBox,
+    gtk::Box,
+) {
     let toolbar_view = adw::ToolbarView::new();
 
     // --- Sidebar header bar ---
@@ -90,7 +97,14 @@ pub fn build_sidebar() -> (adw::ToolbarView, adw::HeaderBar, gtk::SearchBar, gtk
 
     toolbar_view.set_content(Some(&notes_scroll));
 
-    (toolbar_view, header, search_bar, search_entry, notes_list, tag_filter_box)
+    (
+        toolbar_view,
+        header,
+        search_bar,
+        search_entry,
+        notes_list,
+        tag_filter_box,
+    )
 }
 
 pub fn build_sidebar_menu() -> gtk::gio::Menu {
@@ -99,17 +113,32 @@ pub fn build_sidebar_menu() -> gtk::gio::Menu {
     // Sort submenu
     let sort_menu = gtk::gio::Menu::new();
     sort_menu.append(Some("Manual"), Some("win.sort-order::manual"));
-    sort_menu.append(Some("Modified \u{2193}"), Some("win.sort-order::modified-desc"));
-    sort_menu.append(Some("Modified \u{2191}"), Some("win.sort-order::modified-asc"));
+    sort_menu.append(
+        Some("Modified \u{2193}"),
+        Some("win.sort-order::modified-desc"),
+    );
+    sort_menu.append(
+        Some("Modified \u{2191}"),
+        Some("win.sort-order::modified-asc"),
+    );
     sort_menu.append(Some("Name A\u{2192}Z"), Some("win.sort-order::name-asc"));
     sort_menu.append(Some("Name Z\u{2192}A"), Some("win.sort-order::name-desc"));
-    sort_menu.append(Some("Created \u{2193}"), Some("win.sort-order::created-desc"));
-    sort_menu.append(Some("Created \u{2191}"), Some("win.sort-order::created-asc"));
+    sort_menu.append(
+        Some("Created \u{2193}"),
+        Some("win.sort-order::created-desc"),
+    );
+    sort_menu.append(
+        Some("Created \u{2191}"),
+        Some("win.sort-order::created-asc"),
+    );
     menu.append_submenu(Some("Sort by\u{2026}"), &sort_menu);
 
     let section1 = gtk::gio::Menu::new();
     section1.append(Some("New Folder"), Some("win.new-folder"));
-    section1.append(Some("New from Template\u{2026}"), Some("win.new-from-template"));
+    section1.append(
+        Some("New from Template\u{2026}"),
+        Some("win.new-from-template"),
+    );
     section1.append(Some("Daily Note"), Some("win.daily-note"));
     section1.append(Some("View Trash"), Some("win.view-trash"));
     menu.append_section(None, &section1);

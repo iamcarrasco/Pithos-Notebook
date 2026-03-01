@@ -1,8 +1,8 @@
-use adw::prelude::*;
-use std::collections::HashMap;
-use pithos_core::state::*;
-use pithos_core::search::note_matches_query;
 use crate::*;
+use adw::prelude::*;
+use pithos_core::search::note_matches_query;
+use pithos_core::state::*;
+use std::collections::HashMap;
 
 // ---------------------------------------------------------------------------
 // Sidebar signal wiring
@@ -25,13 +25,11 @@ pub fn wire_sidebar_signals(
             }
 
             let ctx_inner = ctx.clone();
-            let source_id = glib::timeout_add_local_once(
-                std::time::Duration::from_millis(150),
-                move || {
+            let source_id =
+                glib::timeout_add_local_once(std::time::Duration::from_millis(150), move || {
                     ctx_inner.search_timeout_id.set(None);
                     refresh_note_list(&ctx_inner);
-                },
-            );
+                });
             ctx.search_timeout_id.set(Some(source_id));
         });
     }
@@ -181,7 +179,11 @@ fn move_vec_item<T>(items: &mut Vec<T>, from: usize, mut to: usize) {
     items.insert(to, item);
 }
 
-fn would_create_folder_cycle(state: &DocState, folder_id: &str, new_parent_id: Option<&str>) -> bool {
+fn would_create_folder_cycle(
+    state: &DocState,
+    folder_id: &str,
+    new_parent_id: Option<&str>,
+) -> bool {
     let mut current = new_parent_id.map(str::to_string);
     while let Some(parent) = current {
         if parent == folder_id {
@@ -301,7 +303,8 @@ fn apply_sidebar_drop(
 ) -> bool {
     let mut state = ctx.state.borrow_mut();
 
-    if state.viewing_trash || !state.search_query.trim().is_empty() || !state.filter_tags.is_empty() {
+    if state.viewing_trash || !state.search_query.trim().is_empty() || !state.filter_tags.is_empty()
+    {
         return false;
     }
 
@@ -508,7 +511,13 @@ pub fn show_folder_context_menu(
                 let state = ctx.state.borrow();
                 format!("Note {}", state.next_note_seq)
             };
-            create_note_in_folder(&ctx, name, format!("# {}\n\n", "Untitled"), Vec::new(), Some(folder_id.clone()));
+            create_note_in_folder(
+                &ctx,
+                name,
+                format!("# {}\n\n", "Untitled"),
+                Vec::new(),
+                Some(folder_id.clone()),
+            );
         });
     }
     {
@@ -548,7 +557,10 @@ pub fn rename_folder_dialog(ctx: &EditorCtx, folder_id: &str) {
             .unwrap_or_default()
     };
 
-    let dialog = adw::AlertDialog::new(Some("Rename Folder"), Some("Enter a new name for the folder"));
+    let dialog = adw::AlertDialog::new(
+        Some("Rename Folder"),
+        Some("Enter a new name for the folder"),
+    );
 
     let entry = gtk::Entry::new();
     entry.set_text(&current_name);
@@ -567,31 +579,30 @@ pub fn rename_folder_dialog(ctx: &EditorCtx, folder_id: &str) {
     dialog.connect_response(None, move |dlg, response| {
         let new_name = entry.text().trim().to_string();
         dlg.set_extra_child(gtk::Widget::NONE);
-        if response == "rename"
-            && !new_name.is_empty() {
-                let conflict = {
-                    let state = ctx.state.borrow();
-                    let parent = state
-                        .folders
-                        .iter()
-                        .find(|f| f.id == folder_id)
-                        .and_then(|f| f.parent_id.clone());
-                    folder_name_exists(&state.folders, &new_name, &parent, Some(&folder_id))
-                };
-                if conflict {
-                    send_toast(&ctx, "A folder with that name already exists here");
-                    return;
-                }
-                {
-                    let mut state = ctx.state.borrow_mut();
-                    if let Some(f) = state.folders.iter_mut().find(|f| f.id == folder_id) {
-                        f.name = new_name;
-                        f.updated_at = unix_now();
-                    }
-                }
-                refresh_note_list(&ctx);
-                trigger_vault_save(&ctx);
+        if response == "rename" && !new_name.is_empty() {
+            let conflict = {
+                let state = ctx.state.borrow();
+                let parent = state
+                    .folders
+                    .iter()
+                    .find(|f| f.id == folder_id)
+                    .and_then(|f| f.parent_id.clone());
+                folder_name_exists(&state.folders, &new_name, &parent, Some(&folder_id))
+            };
+            if conflict {
+                send_toast(&ctx, "A folder with that name already exists here");
+                return;
             }
+            {
+                let mut state = ctx.state.borrow_mut();
+                if let Some(f) = state.folders.iter_mut().find(|f| f.id == folder_id) {
+                    f.name = new_name;
+                    f.updated_at = unix_now();
+                }
+            }
+            refresh_note_list(&ctx);
+            trigger_vault_save(&ctx);
+        }
     });
     dialog.present(Some(&window));
 }
@@ -666,15 +677,27 @@ trait NoteSortable {
 }
 
 impl NoteSortable for NoteSummary {
-    fn name(&self) -> &str { &self.name }
-    fn updated_at(&self) -> i64 { self.updated_at }
-    fn created_at(&self) -> i64 { self.created_at }
+    fn name(&self) -> &str {
+        &self.name
+    }
+    fn updated_at(&self) -> i64 {
+        self.updated_at
+    }
+    fn created_at(&self) -> i64 {
+        self.created_at
+    }
 }
 
 impl NoteSortable for &NoteSummary {
-    fn name(&self) -> &str { &self.name }
-    fn updated_at(&self) -> i64 { self.updated_at }
-    fn created_at(&self) -> i64 { self.created_at }
+    fn name(&self) -> &str {
+        &self.name
+    }
+    fn updated_at(&self) -> i64 {
+        self.updated_at
+    }
+    fn created_at(&self) -> i64 {
+        self.created_at
+    }
 }
 
 pub fn apply_note_sort(visible: &mut [NoteSummary], sort_order: SortOrder) {
@@ -813,7 +836,8 @@ pub fn refresh_note_list(ctx: &EditorCtx) {
 
     // Toggle empty state
     let has_notes = !ctx.state.borrow().notes.is_empty();
-    ctx.content_stack.set_visible_child_name(if has_notes { "editor" } else { "empty" });
+    ctx.content_stack
+        .set_visible_child_name(if has_notes { "editor" } else { "empty" });
 }
 
 // ---------------------------------------------------------------------------
@@ -1089,8 +1113,7 @@ pub fn render_tree_level(
     // Render folders first at this level
     if let Some(child_folders) = folders_by_parent.get(&key) {
         for folder in child_folders {
-            let note_count =
-                count_descendant_notes(&folder.id, folders_by_parent, notes_by_parent);
+            let note_count = count_descendant_notes(&folder.id, folders_by_parent, notes_by_parent);
             let row = build_folder_row(folder, depth, note_count);
             ctx.notes_list.append(&row);
             row_items.push(SidebarRowKind::Folder(folder.id.clone()));
@@ -1244,7 +1267,10 @@ mod tests {
     fn test_single_word_search() {
         assert!(note_matches_query(&make_note("Rust notes", ""), "rust"));
         assert!(note_matches_query(&make_note("", "learning rust"), "rust"));
-        assert!(!note_matches_query(&make_note("python notes", "no match"), "rust"));
+        assert!(!note_matches_query(
+            &make_note("python notes", "no match"),
+            "rust"
+        ));
     }
 
     #[test]
@@ -1260,7 +1286,10 @@ mod tests {
 
     #[test]
     fn test_content_match() {
-        assert!(note_matches_query(&make_note("title", "memory safety is great"), "memory safety"));
+        assert!(note_matches_query(
+            &make_note("title", "memory safety is great"),
+            "memory safety"
+        ));
     }
 
     #[test]

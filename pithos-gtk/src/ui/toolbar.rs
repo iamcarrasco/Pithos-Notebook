@@ -18,7 +18,10 @@ pub fn build_toolbar() -> (gtk::Box, ToolbarWidgets) {
     let bold_btn = icon_button("format-text-bold-symbolic", "Bold (Ctrl+B)");
     let italic_btn = icon_button("format-text-italic-symbolic", "Italic (Ctrl+I)");
     let underline_btn = icon_button("format-text-underline-symbolic", "Underline (Ctrl+U)");
-    let strike_btn = icon_button("format-text-strikethrough-symbolic", "Strikethrough (Ctrl+D)");
+    let strike_btn = icon_button(
+        "format-text-strikethrough-symbolic",
+        "Strikethrough (Ctrl+D)",
+    );
     let code_btn = symbol_button("<>", "Inline Code (Ctrl+E)");
 
     let block_menu_btn = gtk::MenuButton::new();
@@ -211,7 +214,13 @@ pub fn build_toolbar() -> (gtk::Box, ToolbarWidgets) {
 
     let format_group = gtk::Box::new(gtk::Orientation::Horizontal, 0);
     format_group.add_css_class("linked");
-    for button in [&bold_btn, &italic_btn, &underline_btn, &strike_btn, &code_btn] {
+    for button in [
+        &bold_btn,
+        &italic_btn,
+        &underline_btn,
+        &strike_btn,
+        &code_btn,
+    ] {
         format_group.append(button);
     }
     toolbar.append(&format_group);

@@ -1,7 +1,7 @@
 pub mod crypto;
-pub mod vault;
-pub mod state;
+pub mod export;
 pub mod notes;
 pub mod search;
+pub mod state;
 pub mod templates;
-pub mod export;
+pub mod vault;

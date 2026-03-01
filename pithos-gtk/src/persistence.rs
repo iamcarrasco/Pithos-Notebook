@@ -1,9 +1,11 @@
-use adw::prelude::*;
-use std::{fs, path::PathBuf};
-use pithos_core::state::*;
-use pithos_core::crypto;
-use pithos_core::vault;
 use crate::*;
+use adw::prelude::*;
+use pithos_core::crypto;
+use pithos_core::state::*;
+use pithos_core::vault;
+use std::{fs, io::Write, path::PathBuf};
+
+const TYPST_TEMPLATE: &str = include_str!("../../data/typst_template.typ");
 
 // ---------------------------------------------------------------------------
 // File I/O
@@ -26,8 +28,10 @@ pub fn open_document(ctx: &EditorCtx) {
 
     let ctx = ctx.clone();
     let window = ctx.window.clone();
-    dialog.open(Some(&window), gtk::gio::Cancellable::NONE, move |result: Result<gtk::gio::File, gtk::glib::Error>| {
-        match result {
+    dialog.open(
+        Some(&window),
+        gtk::gio::Cancellable::NONE,
+        move |result: Result<gtk::gio::File, gtk::glib::Error>| match result {
             Ok(file) => {
                 if let Some(path) = file.path() {
                     match fs::read_to_string(&path) {
@@ -58,8 +62,8 @@ pub fn open_document(ctx: &EditorCtx) {
                     send_toast(&ctx, &format!("Could not open file picker: {e}"));
                 }
             }
-        }
-    });
+        },
+    );
 }
 
 pub fn save_document(ctx: &EditorCtx) {
@@ -95,8 +99,10 @@ pub fn save_document_as(ctx: &EditorCtx) {
 
     let ctx = ctx.clone();
     let window = ctx.window.clone();
-    dialog.save(Some(&window), gtk::gio::Cancellable::NONE, move |result: Result<gtk::gio::File, gtk::glib::Error>| {
-        match result {
+    dialog.save(
+        Some(&window),
+        gtk::gio::Cancellable::NONE,
+        move |result: Result<gtk::gio::File, gtk::glib::Error>| match result {
             Ok(file) => {
                 if let Some(mut path) = file.path() {
                     if path.extension().is_none() {
@@ -116,91 +122,277 @@ pub fn save_document_as(ctx: &EditorCtx) {
                     send_toast(&ctx, &format!("Could not open save dialog: {e}"));
                 }
             }
-        }
-    });
+        },
+    );
 }
 
-pub fn export_as_html(ctx: &EditorCtx) {
-    let markdown = current_markdown(ctx);
-    let note_name = {
-        let state = ctx.state.borrow();
-        find_note_index(&state.notes, &state.active_note_id)
-            .map(|i| state.notes[i].name.clone())
-            .unwrap_or_else(|| "Untitled".to_string())
-    };
+const EXPORT_FORMATS: &[(&str, &str)] = &[
+    ("Markdown", "md"),
+    ("HTML", "html"),
+    ("PDF", "pdf"),
+    ("Word", "docx"),
+    ("LaTeX", "tex"),
+    ("EPUB", "epub"),
+];
 
-    // Convert markdown to HTML using pulldown-cmark
-    let parser = pulldown_cmark::Parser::new(&markdown);
-    let mut html_body = String::new();
-    pulldown_cmark::html::push_html(&mut html_body, parser);
+pub fn export_document(ctx: &EditorCtx) {
+    let dialog = adw::AlertDialog::new(Some("Export"), Some("Choose a format"));
 
-    let html = format!(
-        r#"<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{title}</title>
-<style>
-body {{ font-family: system-ui, -apple-system, sans-serif; max-width: 48em; margin: 2em auto; padding: 0 1em; line-height: 1.6; color: #222; }}
-h1, h2, h3 {{ margin-top: 1.5em; }}
-code {{ background: #f4f4f4; padding: 0.15em 0.3em; border-radius: 3px; font-size: 0.9em; }}
-pre {{ background: #f4f4f4; padding: 1em; border-radius: 6px; overflow-x: auto; }}
-pre code {{ background: none; padding: 0; }}
-blockquote {{ border-left: 3px solid #ddd; margin-left: 0; padding-left: 1em; color: #555; }}
-table {{ border-collapse: collapse; width: 100%; }}
-th, td {{ border: 1px solid #ddd; padding: 0.5em 0.75em; text-align: left; }}
-th {{ background: #f8f8f8; }}
-img {{ max-width: 100%; }}
-</style>
-</head>
-<body>
-{body}
-</body>
-</html>"#,
-        title = note_name.replace('<', "&lt;").replace('>', "&gt;"),
-        body = html_body,
+    let dropdown = gtk::DropDown::from_strings(
+        &EXPORT_FORMATS
+            .iter()
+            .map(|(label, _)| *label)
+            .collect::<Vec<_>>(),
     );
+    dialog.set_extra_child(Some(&dropdown));
 
-    let dialog = gtk::FileDialog::builder()
-        .title("Export as HTML")
-        .accept_label("Export")
-        .build();
-
-    let suggested = format!("{}.html", note_name);
-    dialog.set_initial_name(Some(&suggested));
-
-    let filter = gtk::FileFilter::new();
-    filter.set_name(Some("HTML files"));
-    filter.add_pattern("*.html");
-    filter.add_pattern("*.htm");
-    let filters = gtk::gio::ListStore::new::<gtk::FileFilter>();
-    filters.append(&filter);
-    dialog.set_filters(Some(&filters));
+    dialog.add_response("cancel", "Cancel");
+    dialog.add_response("export", "Export");
+    dialog.set_response_appearance("export", adw::ResponseAppearance::Suggested);
+    dialog.set_default_response(Some("export"));
+    dialog.set_close_response("cancel");
 
     let ctx = ctx.clone();
     let window = ctx.window.clone();
-    dialog.save(Some(&window), gtk::gio::Cancellable::NONE, move |result: Result<gtk::gio::File, gtk::glib::Error>| {
-        match result {
-            Ok(file) => {
-                if let Some(mut path) = file.path() {
-                    if path.extension().is_none() {
-                        path.set_extension("html");
-                    }
-                    match fs::write(&path, &html) {
-                        Ok(_) => send_toast(&ctx, "Exported as HTML"),
-                        Err(e) => show_error(
+    let window_for_present = window.clone();
+    dialog.connect_response(None, move |dlg, response| {
+        dlg.set_extra_child(gtk::Widget::NONE);
+        if response != "export" {
+            return;
+        }
+
+        let idx = dropdown.selected() as usize;
+        let (_, ext) = EXPORT_FORMATS[idx];
+
+        let markdown = current_markdown(&ctx);
+        let note_name = {
+            let state = ctx.state.borrow();
+            find_note_index(&state.notes, &state.active_note_id)
+                .map(|i| state.notes[i].name.clone())
+                .unwrap_or_else(|| "Untitled".to_string())
+        };
+
+        let file_dialog = gtk::FileDialog::builder()
+            .title("Export")
+            .accept_label("Export")
+            .build();
+
+        let suggested = format!("{note_name}.{ext}");
+        file_dialog.set_initial_name(Some(&suggested));
+
+        let filter = gtk::FileFilter::new();
+        filter.set_name(Some(ext));
+        filter.add_pattern(&format!("*.{ext}"));
+        let filters = gtk::gio::ListStore::new::<gtk::FileFilter>();
+        filters.append(&filter);
+        file_dialog.set_filters(Some(&filters));
+
+        let ctx = ctx.clone();
+        let ext = ext.to_string();
+        let window = window.clone();
+        file_dialog.save(
+            Some(&window),
+            gtk::gio::Cancellable::NONE,
+            move |result: Result<gtk::gio::File, gtk::glib::Error>| match result {
+                Ok(file) => {
+                    if let Some(mut path) = file.path() {
+                        if path.extension().is_none() {
+                            path.set_extension(&ext);
+                        }
+                        if ext == "md" || ext == "markdown" {
+                            match fs::write(&path, &markdown) {
+                                Ok(_) => send_toast(&ctx, "Exported as Markdown"),
+                                Err(e) => show_error(
+                                    &ctx.window,
+                                    "Export Failed",
+                                    &format!("Could not write file: {e}"),
+                                ),
+                            }
+                        } else {
+                            run_pandoc_export(&ctx, &markdown, &path, &note_name);
+                        }
+                    } else {
+                        show_error(
                             &ctx.window,
                             "Export Failed",
-                            &format!("Could not write HTML: {e}"),
-                        ),
+                            "This export location is not a local path.",
+                        );
                     }
                 }
+                Err(e) => {
+                    if !e.matches(gtk::DialogError::Dismissed) {
+                        send_toast(&ctx, &format!("Could not open export dialog: {e}"));
+                    }
+                }
+            },
+        );
+    });
+    dialog.present(Some(&window_for_present));
+}
+
+/// Locate the typst binary, checking PATH and common install locations.
+fn which_typst() -> Option<PathBuf> {
+    // Check PATH via `which`
+    if let Ok(out) = std::process::Command::new("which").arg("typst").output() {
+        if out.status.success() {
+            let p = String::from_utf8_lossy(&out.stdout).trim().to_string();
+            if !p.is_empty() {
+                return Some(PathBuf::from(p));
+            }
+        }
+    }
+    // Common locations
+    for dir in &[".local/bin", ".cargo/bin"] {
+        if let Some(home) = std::env::var_os("HOME") {
+            let p = PathBuf::from(home).join(dir).join("typst");
+            if p.exists() {
+                return Some(p);
+            }
+        }
+    }
+    // System paths
+    for p in &["/usr/local/bin/typst", "/usr/bin/typst", "/snap/bin/typst"] {
+        let path = PathBuf::from(p);
+        if path.exists() {
+            return Some(path);
+        }
+    }
+    None
+}
+
+fn write_unique_temp_file(prefix: &str, ext: &str, data: &[u8]) -> std::io::Result<PathBuf> {
+    use std::io::ErrorKind;
+
+    let tmp_dir = std::env::temp_dir();
+    for _ in 0..32 {
+        let nonce = rand::random::<u64>();
+        let path = tmp_dir.join(format!(
+            "{prefix}-{}-{nonce:016x}.{ext}",
+            std::process::id()
+        ));
+        let mut file = match fs::OpenOptions::new()
+            .create_new(true)
+            .write(true)
+            .open(&path)
+        {
+            Ok(file) => file,
+            Err(e) if e.kind() == ErrorKind::AlreadyExists => continue,
+            Err(e) => return Err(e),
+        };
+        if let Err(e) = file.write_all(data) {
+            let _ = fs::remove_file(&path);
+            return Err(e);
+        }
+        return Ok(path);
+    }
+
+    Err(std::io::Error::new(
+        std::io::ErrorKind::AlreadyExists,
+        "Could not allocate a unique temporary file",
+    ))
+}
+
+fn run_pandoc_export(ctx: &EditorCtx, markdown: &str, output: &std::path::Path, title: &str) {
+    let input_path = match write_unique_temp_file("pithos-export", "md", markdown.as_bytes()) {
+        Ok(path) => path,
+        Err(e) => {
+            show_error(
+                &ctx.window,
+                "Export Failed",
+                &format!("Could not write temp file: {e}"),
+            );
+            return;
+        }
+    };
+    let output = output.to_path_buf();
+    let input = input_path.clone();
+    let title = title.to_string();
+
+    let (tx, rx) = std::sync::mpsc::channel::<Result<(), String>>();
+
+    let is_pdf = output
+        .extension()
+        .and_then(|e| e.to_str())
+        .is_some_and(|ext| ext.eq_ignore_ascii_case("pdf"));
+
+    std::thread::spawn(move || {
+        let mut cmd = std::process::Command::new("pandoc");
+        cmd.arg("-s")
+            .arg("--metadata")
+            .arg(format!("title={title}"))
+            .arg("-f")
+            .arg("markdown");
+
+        let mut template_path: Option<PathBuf> = None;
+        if is_pdf {
+            // Write the bundled typst template to a temp file for pandoc to use.
+            let temp_template_path = match write_unique_temp_file(
+                "pithos-typst-template",
+                "typ",
+                TYPST_TEMPLATE.as_bytes(),
+            ) {
+                Ok(path) => path,
+                Err(e) => {
+                    let _ = fs::remove_file(&input);
+                    let _ = tx.send(Err(format!("Could not write temp template file: {e}")));
+                    return;
+                }
+            };
+            template_path = Some(temp_template_path.clone());
+            let typst_path = which_typst().unwrap_or_else(|| "typst".into());
+            cmd.arg(format!("--pdf-engine={}", typst_path.display()));
+            // Typst treats import paths that start with '/' as project-root relative.
+            // Force root to filesystem '/' so '/tmp/...' resolves correctly.
+            cmd.arg("--pdf-engine-opt=--root=/");
+            cmd.arg("-V")
+                .arg(format!("template={}", temp_template_path.display()));
+            cmd.arg("--variable=papersize:a4");
+        }
+
+        cmd.arg("-o").arg(&output).arg(&input);
+
+        let result = cmd.output();
+
+        let _ = fs::remove_file(&input);
+        if let Some(path) = template_path {
+            let _ = fs::remove_file(path);
+        }
+
+        match result {
+            Ok(out) if out.status.success() => {
+                let _ = tx.send(Ok(()));
+            }
+            Ok(out) => {
+                let stderr = String::from_utf8_lossy(&out.stderr).to_string();
+                let _ = tx.send(Err(stderr));
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                let _ = tx.send(Err(
+                    "Pandoc is not installed.\n\nInstall it with:\n  sudo apt install pandoc"
+                        .to_string(),
+                ));
             }
             Err(e) => {
-                if !e.matches(gtk::DialogError::Dismissed) {
-                    send_toast(&ctx, &format!("Could not open export dialog: {e}"));
-                }
+                let _ = tx.send(Err(format!("Failed to run pandoc: {e}")));
+            }
+        }
+    });
+
+    let ctx = ctx.clone();
+    glib::timeout_add_local(std::time::Duration::from_millis(50), move || {
+        match rx.try_recv() {
+            Ok(Ok(())) => {
+                send_toast(&ctx, "Exported");
+                glib::ControlFlow::Break
+            }
+            Ok(Err(e)) => {
+                show_error(&ctx.window, "Export Failed", &e);
+                glib::ControlFlow::Break
+            }
+            Err(std::sync::mpsc::TryRecvError::Empty) => glib::ControlFlow::Continue,
+            Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                show_error(&ctx.window, "Export Failed", "Export thread disconnected");
+                glib::ControlFlow::Break
             }
         }
     });
@@ -246,16 +438,19 @@ pub fn trigger_vault_save(ctx: &EditorCtx) {
     }
 
     let ctx_clone = ctx.clone();
-    let source_id = glib::timeout_add_local_once(std::time::Duration::from_millis(500), move || {
-        ctx_clone.save_timeout_id.set(None);
-        perform_vault_save_async(&ctx_clone, false);
-    });
+    let source_id =
+        glib::timeout_add_local_once(std::time::Duration::from_millis(500), move || {
+            ctx_clone.save_timeout_id.set(None);
+            perform_vault_save_async(&ctx_clone, false);
+        });
 
     ctx.save_timeout_id.set(Some(source_id));
 }
 
 /// Collect vault data on the main thread (cheap), return everything needed for I/O.
-pub fn prepare_vault_save(ctx: &EditorCtx) -> Option<(vault::VaultData, crypto::CachedKey, String)> {
+pub fn prepare_vault_save(
+    ctx: &EditorCtx,
+) -> Option<(vault::VaultData, crypto::CachedKey, String)> {
     let markdown = current_markdown(ctx);
     update_active_note_content(ctx, &markdown);
 
@@ -284,19 +479,24 @@ pub fn vault_save_blocking(
 ) -> Result<(), String> {
     vault::backup_vault(vault_folder);
     use zeroize::Zeroize;
-    let mut json = serde_json::to_string_pretty(&vault_data)
-        .map_err(|e| format!("Serialization: {e}"))?;
-    let result = crypto::encrypt_vault_fast(&json, key)
-        .map_err(|e| format!("Encryption: {e}"));
+    let mut json =
+        serde_json::to_string_pretty(&vault_data).map_err(|e| format!("Serialization: {e}"))?;
+    let result = crypto::encrypt_vault_fast(&json, key).map_err(|e| format!("Encryption: {e}"));
     json.zeroize(); // Wipe plaintext vault contents from memory
     let encrypted = result?;
-    vault::write_vault_raw(vault_folder, &encrypted)
-        .map_err(|e| format!("Write: {e}"))?;
+    vault::write_vault_raw(vault_folder, &encrypted).map_err(|e| format!("Write: {e}"))?;
     Ok(())
 }
 
-/// Synchronous vault save — used only for close-request where we must block.
+/// Synchronous vault save — used only for vault-switch flows where we must block.
+/// If an async save is in flight, bump the generation so the async callback
+/// won't overwrite our (newer) sync write, then proceed with the sync save.
 pub fn perform_vault_save_sync(ctx: &EditorCtx) -> bool {
+    // Invalidate any in-flight async save so its completion callback won't
+    // re-save or mark the document clean with stale data.
+    if ctx.saving.get() {
+        ctx.save_generation.set(ctx.save_generation.get().wrapping_add(2));
+    }
     let Some((vault_data, key, vault_folder)) = prepare_vault_save(ctx) else {
         return false;
     };
@@ -306,7 +506,11 @@ pub fn perform_vault_save_sync(ctx: &EditorCtx) -> bool {
             true
         }
         Err(e) => {
-            show_error(&ctx.window, "Save Failed", &format!("Vault save failed: {e}"));
+            show_error(
+                &ctx.window,
+                "Save Failed",
+                &format!("Vault save failed: {e}"),
+            );
             false
         }
     }
@@ -400,20 +604,51 @@ pub fn perform_vault_save_async(ctx: &EditorCtx, toast: bool) {
 // Auto-save
 // ---------------------------------------------------------------------------
 
+pub fn stop_background_tasks(ctx: &EditorCtx) {
+    if let Some(source_id) = ctx.save_timeout_id.take() {
+        source_id.remove();
+    }
+    if let Some(source_id) = ctx.sync_timeout_id.take() {
+        source_id.remove();
+    }
+    if let Some(source_id) = ctx.search_timeout_id.take() {
+        source_id.remove();
+    }
+    if let Some(source_id) = ctx.auto_save_timeout_id.take() {
+        source_id.remove();
+    }
+    if let Some(monitor) = ctx.vault_file_monitor.borrow_mut().take() {
+        monitor.cancel();
+    }
+}
+
 pub fn setup_auto_save(ctx: &EditorCtx) {
-    let ctx = ctx.clone();
-    glib::timeout_add_seconds_local(AUTO_SAVE_INTERVAL_SECS, move || {
-        auto_save_tick(&ctx);
+    if let Some(source_id) = ctx.auto_save_timeout_id.take() {
+        source_id.remove();
+    }
+
+    let ctx_clone = ctx.clone();
+    let source_id = glib::timeout_add_seconds_local(AUTO_SAVE_INTERVAL_SECS, move || {
+        auto_save_tick(&ctx_clone);
         glib::ControlFlow::Continue
     });
+
+    ctx.auto_save_timeout_id.set(Some(source_id));
 }
 
 /// Watch vault.json for external changes and notify the user.
 pub fn watch_vault_file(ctx: &EditorCtx) {
+    if let Some(monitor) = ctx.vault_file_monitor.borrow_mut().take() {
+        monitor.cancel();
+    }
+
     let vault_folder = ctx.vault_folder.borrow().clone();
     let vault_path = format!("{vault_folder}/vault.json");
     let file = gtk::gio::File::for_path(&vault_path);
-    let monitor = match file.monitor_file(gtk::gio::FileMonitorFlags::NONE, None::<&gtk::gio::Cancellable>) {
+    let monitor = match file.monitor_file(
+        gtk::gio::FileMonitorFlags::NONE,
+        None::<&gtk::gio::Cancellable>,
+    ) {
         Ok(m) => m,
         Err(e) => {
             eprintln!("Failed to watch vault file: {e}");
@@ -421,20 +656,26 @@ pub fn watch_vault_file(ctx: &EditorCtx) {
         }
     };
 
-    let ctx = ctx.clone();
+    let saving = ctx.saving.clone();
+    let last_save_completed = ctx.last_save_completed.clone();
+    let toast_overlay = ctx.toast_overlay.clone();
     monitor.connect_changed(move |_, _, _, event| {
         if event == gtk::gio::FileMonitorEvent::ChangesDoneHint {
             // Ignore changes within 3 seconds of our own save completing,
             // or while a save is still in flight
-            if ctx.saving.get() { return; }
-            if ctx.last_save_completed.get().elapsed() < std::time::Duration::from_secs(3) { return; }
-            send_toast(&ctx, "Vault changed externally");
+            if saving.get() {
+                return;
+            }
+            if last_save_completed.get().elapsed() < std::time::Duration::from_secs(3) {
+                return;
+            }
+            let toast = adw::Toast::new("Vault changed externally");
+            toast.set_timeout(2);
+            toast_overlay.add_toast(toast);
         }
     });
 
-    // Keep monitor alive by leaking it (app has one vault per lifetime)
-    // This is acceptable since monitors are lightweight and we want them for the app's duration
-    std::mem::forget(monitor);
+    *ctx.vault_file_monitor.borrow_mut() = Some(monitor);
 }
 
 pub fn auto_save_tick(ctx: &EditorCtx) {
@@ -448,7 +689,7 @@ pub fn auto_save_tick(ctx: &EditorCtx) {
         let mut state = ctx.state.borrow_mut();
         if let Some(index) = find_note_index(&state.notes, &state.active_note_id) {
             let content = state.notes[index].content.clone();
-            push_snapshot(&mut state.notes[index], content);
+            pithos_core::notes::push_snapshot(&mut state.notes[index], content);
         }
     }
     perform_vault_save_async(ctx, false);

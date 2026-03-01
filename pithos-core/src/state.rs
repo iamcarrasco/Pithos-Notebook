@@ -1,6 +1,6 @@
+use crate::vault::AssetMeta;
 use std::collections::HashMap;
 use std::path::PathBuf;
-use crate::vault::AssetMeta;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SortOrder {
@@ -273,7 +273,7 @@ pub struct DocState {
     pub zen_mode: bool,
     pub sidebar_visible: bool,
     pub custom_templates: Vec<(String, String, String)>, // (name, content, tags_csv)
-    pub disabled_templates: Vec<String>, // names of templates hidden from picker
+    pub disabled_templates: Vec<String>,                 // names of templates hidden from picker
     pub filter_tags: Vec<String>,
     pub tag_filter_and: bool,
     pub sidebar_width: i32,
@@ -440,7 +440,6 @@ pub fn folder_name_exists(
             && exclude_id.is_none_or(|eid| f.id != eid)
     })
 }
-
 
 #[cfg(test)]
 mod tests {

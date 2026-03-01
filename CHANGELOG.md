@@ -1,5 +1,25 @@
 # Changelog
 
+## v0.2.5
+
+### Bug Fixes & Security
+- **Fixed double PBKDF2** — Cached key path no longer re-derives the key unnecessarily
+- **Save race condition** — Async/sync save ordering secured with generation counter bump
+- **Passphrase change safety** — Refused while async save is in-flight; writes vault before assets for safer failure ordering
+- **Config write failures logged** — `save_config_or_log()` replaces silent `let _ =` ignoring of config write errors
+- **PDF export path fix** — `--pdf-engine-opt=--root=/` resolves Typst template path correctly
+- **Undo/redo fix** — Toolbar undo/redo buttons now invoke GtkSourceView undo rather than no-op
+- **Table off-by-one** — Fixed column insertion placing the pipe in the wrong position
+- **Checkbox toggle** — Fixed toggle logic for task lists in editor
+- **Passphrase zeroization** — Passphrase strings securely zeroized after use in all dialogs
+
+### Improvements
+- **Export formats expanded** — Now supports Markdown, HTML, PDF, Word (.docx), LaTeX (.tex), and EPUB
+- **Removed stale code** — Deleted pre-workspace `src/` directory (19 orphaned files)
+- **Removed unused dependency** — `pulldown-cmark` dropped from `pithos-gtk`
+- **Zen mode split restore** — Split pane position saved before zen mode and restored on exit
+- **Error dialog styling** — Delete confirmation uses destructive action styling
+
 ## v0.2.0
 
 ### New Features

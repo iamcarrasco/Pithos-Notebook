@@ -1,13 +1,13 @@
 use adw::prelude::*;
-use sourceview5::prelude::*;
 use sourceview5 as sourceview;
+use sourceview5::prelude::*;
 use std::{cell::Cell, cell::RefCell, rc::Rc};
 
-use pithos_core::crypto;
-use pithos_core::vault;
-use pithos_core::state::*;
 use crate::ui::types::*;
-use crate::*; // For everything left in main.rs temporarily
+use crate::*;
+use pithos_core::crypto;
+use pithos_core::state::*;
+use pithos_core::vault; // For everything left in main.rs temporarily
 
 pub fn build_ui(app: &adw::Application) {
     // Register the bundled app icon so GTK can find it
@@ -65,8 +65,14 @@ pub fn build_editor(
     cached_key: crypto::CachedKey,
 ) {
     // --- Build sidebar pane ---
-    let (sidebar_toolbar_view, _sidebar_header, search_bar, search_entry, notes_list, tag_filter_box) =
-        build_sidebar();
+    let (
+        sidebar_toolbar_view,
+        _sidebar_header,
+        search_bar,
+        search_entry,
+        notes_list,
+        tag_filter_box,
+    ) = build_sidebar();
 
     // --- Build content pane ---
     let ContentPaneWidgets {
@@ -154,9 +160,11 @@ pub fn build_editor(
         vault_folder: Rc::new(RefCell::new(vault_folder)),
         cached_key: Rc::new(RefCell::new(Some(cached_key))),
         save_timeout_id: Rc::new(Cell::new(None)),
+        auto_save_timeout_id: Rc::new(Cell::new(None)),
         save_generation: Rc::new(Cell::new(0)),
         saving: Rc::new(Cell::new(false)),
         close_requested: Rc::new(Cell::new(false)),
+        vault_file_monitor: Rc::new(RefCell::new(None)),
         split_view: split_view.clone(),
         toast_overlay,
         toolbar: toolbar_scroll.clone(),
@@ -180,11 +188,12 @@ pub fn build_editor(
         search_settings,
         vault_name_label,
         last_save_completed: Rc::new(Cell::new(std::time::Instant::now())),
+        pre_zen_split_pos: Rc::new(Cell::new(0)),
     };
 
     initialize_state(&ctx);
 
-    let purged = purge_old_trash(&mut ctx.state.borrow_mut());
+    let purged = pithos_core::notes::purge_old_trash(&mut ctx.state.borrow_mut());
 
     wire_menu_actions(&ctx);
     wire_toolbar_signals(&ctx, &tb);
@@ -652,7 +661,8 @@ pub fn build_preview_pane() -> (webkit6::WebView, gtk::Box) {
     // (load_html uses NavigationType::Other which must be permitted).
     webview.connect_decide_policy(|_webview, decision, decision_type| {
         if decision_type == webkit6::PolicyDecisionType::NavigationAction {
-            if let Some(nav_decision) = decision.downcast_ref::<webkit6::NavigationPolicyDecision>() {
+            if let Some(nav_decision) = decision.downcast_ref::<webkit6::NavigationPolicyDecision>()
+            {
                 let nav_action = nav_decision.navigation_action();
                 if let Some(mut action) = nav_action {
                     if action.navigation_type() != webkit6::NavigationType::Other {

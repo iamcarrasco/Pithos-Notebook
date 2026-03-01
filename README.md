@@ -73,7 +73,7 @@ Trusted by security professionals, enterprise architects, and consultants for se
 - Follows your system's light or dark mode, or toggle manually.
 - Sidebar collapses automatically on narrow windows.
 - Auto-saves every 30 seconds and when you close the app.
-- Import any .md file. Export notes as Markdown, HTML, or PDF.
+- Import any .md file. Export notes as Markdown, HTML, PDF, Word, LaTeX, or EPUB.
 - Switch between multiple vaults without restarting the app.
 - Full keyboard shortcut coverage and a command palette for every action.
 
@@ -96,6 +96,41 @@ For those who want the technical details:
 | **Telemetry** | None. No analytics, no tracking, no cloud sync |
 
 > **Snap sandbox note:** The snap package disables WebKit's internal bubblewrap sandbox (`WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS`) because snap's strict confinement seccomp filters block the nested bwrap calls WebKit requires. Snap's own strict confinement still sandboxes the entire application. When running from source outside the snap, WebKit retains its full internal sandbox.
+
+---
+
+## Install
+
+### Snap (recommended)
+
+```bash
+sudo snap install pithos-notebook
+```
+
+Pandoc and Typst are bundled inside the snap — PDF, Word, LaTeX, and EPUB export work out of the box.
+
+### Deb
+
+Download the `.deb` from the [Releases](https://github.com/iamcarrasco/Pithos-Notebook/releases) page:
+
+```bash
+sudo apt install ./pithos-gtk_0.2.5-1_amd64.deb
+```
+
+The deb installs `pandoc` automatically via its dependency list. For PDF export you also need [Typst](https://github.com/typst/typst/releases) on your `PATH`.
+
+### Build from source
+
+```bash
+# Install build dependencies (Ubuntu/Debian)
+sudo apt install pkg-config libgtk-4-dev libadwaita-1-dev \
+  libgtksourceview-5-dev libwebkitgtk-6.0-dev libjavascriptcoregtk-6.0-dev
+
+cargo build --release -p pithos-gtk
+# Binary at target/release/pithos-notebook
+```
+
+For export support, install `pandoc` and optionally [Typst](https://github.com/typst/typst/releases) for PDF.
 
 ---
 
