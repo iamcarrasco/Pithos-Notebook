@@ -109,16 +109,6 @@ sudo snap install pithos-notebook
 
 Pandoc and Typst are bundled inside the snap — PDF, Word, LaTeX, and EPUB export work out of the box.
 
-### Deb
-
-Download the `.deb` from the [Releases](https://github.com/iamcarrasco/Pithos-Notebook/releases) page:
-
-```bash
-sudo apt install ./pithos-gtk_0.2.5-1_amd64.deb
-```
-
-The deb installs `pandoc` automatically via its dependency list. For PDF export you also need [Typst](https://github.com/typst/typst/releases) on your `PATH`.
-
 ### Build from source
 
 ```bash
