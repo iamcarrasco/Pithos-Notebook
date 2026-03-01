@@ -49,6 +49,8 @@ apps:
       WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS: "1"
       # Disable DMA-BUF renderer — its kernel interfaces are blocked by snap seccomp filters.
       WEBKIT_DISABLE_DMABUF_RENDERER: "1"
+      # Point pandoc at its data directory inside the snap (templates, abbreviations, etc.).
+      PANDOC_DATA_DIR: "$SNAP/usr/share/pandoc/data"
     plugs:
       - home
       - removable-media
