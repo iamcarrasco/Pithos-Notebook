@@ -1,0 +1,3 @@
+[workspace]
+members = ["pithos-core", "pithos-gtk"]
+resolver = "2"

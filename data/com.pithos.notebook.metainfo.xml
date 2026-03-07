@@ -1,0 +1,121 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>com.pithos.notebook</id>
+  <name>Pithos Notebook</name>
+  <summary>Private, encrypted markdown notebook</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-or-later</project_license>
+  <developer id="com.github.iamcarrasco">
+    <name>iamcarrasco</name>
+  </developer>
+
+  <description>
+    <p>
+      Pithos Notebook is an offline encrypted markdown notebook for Linux.
+      Your notes never leave your machine. AES-256-GCM encryption with
+      PBKDF2 key derivation keeps your data private.
+    </p>
+    <p>Features:</p>
+    <ul>
+      <li>AES-256-GCM encryption with PBKDF2 (600k iterations)</li>
+      <li>Source editor with live HTML preview</li>
+      <li>Mermaid diagram rendering</li>
+      <li>Folders, tags, and full-text search</li>
+      <li>Tabs for working with multiple notes</li>
+      <li>Named snapshots and version history</li>
+      <li>Drag-and-drop encrypted image embedding</li>
+      <li>Export as Markdown or HTML</li>
+      <li>Daily notes and templates</li>
+      <li>Dark mode with system theme support</li>
+    </ul>
+  </description>
+
+  <launchable type="desktop-id">com.pithos.notebook.desktop</launchable>
+
+  <url type="homepage">https://github.com/iamcarrasco/Pithos-Notebook</url>
+  <url type="bugtracker">https://github.com/iamcarrasco/Pithos-Notebook/issues</url>
+  <url type="vcs-browser">https://github.com/iamcarrasco/Pithos-Notebook</url>
+
+  <branding>
+    <color type="primary" scheme_preference="light">#e8f0fe</color>
+    <color type="primary" scheme_preference="dark">#1a237e</color>
+  </branding>
+
+  <content_rating type="oars-1.1" />
+
+  <supports>
+    <control>keyboard</control>
+    <control>pointing</control>
+  </supports>
+
+  <requires>
+    <display_length compare="ge">768</display_length>
+  </requires>
+
+  <releases>
+    <release version="0.3.0" date="2026-03-07">
+      <description>
+        <p>Editor improvements, security hardening, and code quality release.</p>
+        <ul>
+          <li>Toggle formatting: Bold, italic, underline, strikethrough, and code now toggle on/off with selection preserved</li>
+          <li>Smart bold/italic interaction: correctly handles nested *//** markers</li>
+          <li>Selection preserved across toolbar clicks (buttons no longer steal focus)</li>
+          <li>Fixed scroll jump when applying formatting to selected text</li>
+          <li>Fixed list continuation not triggering on Enter (key handler moved to capture phase)</li>
+          <li>Passphrase fully zeroized on drop (key + passphrase string)</li>
+          <li>Vault name displayed in header bar</li>
+          <li>Template deletion uses name lookup instead of stale index</li>
+          <li>Shortcuts dialog no longer panics on build failure</li>
+          <li>Zen mode correctly restores split position of 0</li>
+          <li>Script tag stripping optimized (single lowercase pass)</li>
+          <li>Note ID lookups use HashSet for O(1) performance</li>
+          <li>Passphrase strength validation extracted to shared helper</li>
+          <li>Unknown vault item types now warn instead of silently passing</li>
+          <li>Added asset encryption test coverage</li>
+        </ul>
+      </description>
+    </release>
+    <release version="0.2.5" date="2026-03-01">
+      <description>
+        <p>Bug fixes, security hardening, and export improvements.</p>
+        <ul>
+          <li>Fixed double PBKDF2 derivation in cached key path</li>
+          <li>Fixed async/sync save race condition with generation counter</li>
+          <li>Passphrase change safety: refuse while save in-flight, vault-first write order</li>
+          <li>Config write failures now logged instead of silently ignored</li>
+          <li>Fixed PDF export path resolution for Typst template</li>
+          <li>Export formats expanded: Markdown, HTML, PDF, Word, LaTeX, EPUB</li>
+          <li>Passphrase zeroization, undo/redo fix, table off-by-one fix</li>
+          <li>Removed stale pre-workspace code and unused dependencies</li>
+        </ul>
+      </description>
+    </release>
+    <release version="0.2.0" date="2026-02-24">
+      <description>
+        <p>Major feature release with 12 new features and security hardening.</p>
+        <ul>
+          <li>Find and replace with regex toggle and match count</li>
+          <li>Focus mode, Hemingway mode, and typewriter scrolling</li>
+          <li>Smart list continuation for bullets, ordered lists, and task lists</li>
+          <li>Preview themes (Default, Sepia, Solarized) and synchronized scrolling</li>
+          <li>Auto-hiding header in fullscreen</li>
+          <li>Wiki-link autocomplete, inline link tooltips, and search operators</li>
+          <li>Table editing (add rows, columns, auto-align)</li>
+          <li>Change passphrase with transactional asset re-encryption</li>
+          <li>Copy as HTML, vault file monitoring, trash auto-purge</li>
+          <li>Nonce-based CSP, memory zeroization, atomic writes, path traversal prevention</li>
+        </ul>
+      </description>
+    </release>
+    <release version="0.1.1" date="2025-02-22">
+      <description>
+        <p>Encrypted image storage, export fix, save notification fix.</p>
+      </description>
+    </release>
+    <release version="0.1.0" date="2025-02-19">
+      <description>
+        <p>Initial release — offline encrypted markdown notebook.</p>
+      </description>
+    </release>
+  </releases>
+</component>
